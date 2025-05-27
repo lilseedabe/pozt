@@ -1,19 +1,15 @@
 {
-  "name": "hidden-image-generator",
+  "name": "pozt",
   "version": "1.0.0",
-  "private": true,
+  "description": "Pattern Optical Zone Technology - 視覚の魔法を体験しよう",
   "scripts": {
-    "start": "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT",
-    "build": "cd frontend && npm install && npm run build",
-    "dev:frontend": "cd frontend && npm start",
-    "dev:backend": "cd backend && uvicorn main:app --reload",
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
+    "install:all": "npm run install:backend && npm run install:frontend",
+    "install:backend": "pip install -r requirements.txt",
+    "install:frontend": "cd frontend && npm install",
+    "start:backend": "cd backend && uvicorn main:app --reload",
+    "start:frontend": "cd frontend && npm start",
+    "build:frontend": "cd frontend && npm run build"
   },
-  "devDependencies": {
-    "concurrently": "^8.2.2"
-  },
-  "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=9.0.0"
-  }
+  "author": "",
+  "license": "MIT"
 }
