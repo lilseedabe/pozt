@@ -12,3 +12,4 @@ async def validate_file_size(file_size: int, settings: Settings = Depends(get_ap
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File size exceeds maximum allowed size ({max_size / 1024 / 1024:.1f}MB)"
+        )
