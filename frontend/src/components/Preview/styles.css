@@ -1,0 +1,111 @@
+.preview {
+  width: 100%;
+  animation: fadeIn 0.6s ease-out;
+  margin-bottom: var(--space-lg);
+}
+
+.preview h3 {
+  font-size: 1.5rem;
+  margin-bottom: var(--space-lg);
+  text-align: center;
+  color: var(--text-primary);
+  position: relative;
+  display: inline-block;
+}
+
+.preview h3::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 0;
+  width: 60px;
+  height: 3px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-full);
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-lg);
+}
+
+.preview-card {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-normal);
+  border: 1px solid var(--border-color);
+  animation: slideUp 0.5s ease-out forwards;
+}
+
+.preview-card:hover {
+  transform: translateY(-10px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--accent-primary);
+}
+
+.preview-card h4 {
+  padding: var(--space-md);
+  margin-bottom: 0;
+  background-color: rgba(0, 0, 0, 0.2);
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.preview-card p {
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.preview-image {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  height: 250px;
+}
+
+.preview-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  transition: transform var(--transition-normal);
+}
+
+.preview-card:hover .preview-image img {
+  transform: scale(1.05);
+}
+
+/* カード立体感 */
+.preview-card {
+  perspective: 1000px;
+}
+
+.preview-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  z-index: 1;
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.preview-card:hover::before {
+  opacity: 1;
+}
