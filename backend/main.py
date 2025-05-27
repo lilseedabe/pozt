@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -25,6 +25,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Reactビルドファイルのパスを書き換えるミドルウェア
+@app.middleware("http")
+async def rewrite_static_paths(request: Request, call_next):
+    path = request.url.path
+    
+    # CSSとJSファイルのパスを書き換え
+    if path.startswith("/css/") or path.startswith("/js/") or path.startswith("/media/"):
+        # /css/ -> /static/static/css/
+        new_path = f"/static/static{path}"
+        request.scope["path"] = new_path
+    
+    response = await call_next(request)
+    return response
+
 # ルーターの登録
 app.include_router(health.router, tags=["Health"])
 app.include_router(image.router, prefix="/api", tags=["Image Processing"])
@@ -32,16 +46,43 @@ app.include_router(image.router, prefix="/api", tags=["Image Processing"])
 # 静的ファイルディレクトリを作成
 os.makedirs("static", exist_ok=True)
 
-# 静的ファイルの提供設定
+# 静的ファイルのマウント
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# フロントエンドのアセットファイル（JSやCSS）を提供するマウント
-# 注意: フロントエンドのビルド構造によって変更が必要かもしれません
+# Reactの静的ファイルディレクトリのマウント（存在する場合）
+# create-react-appのビルド構造に対応
+if os.path.exists("static/static"):
+    try:
+        # 追加のマウントポイント - Reactビルドの静的アセット用
+        if os.path.exists("static/static/css"):
+            app.mount("/css", StaticFiles(directory="static/static/css"), name="css")
+        if os.path.exists("static/static/js"):
+            app.mount("/js", StaticFiles(directory="static/static/js"), name="js")
+        if os.path.exists("static/static/media"):
+            app.mount("/media", StaticFiles(directory="static/static/media"), name="media")
+    except Exception as e:
+        print(f"Reactの静的ファイルマウント中にエラーが発生しました: {e}")
+
+# 通常のアセットディレクトリもマウント
 try:
     if os.path.exists("static/assets"):
         app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
 except Exception as e:
     print(f"アセットマウント中にエラーが発生しました: {e}")
+
+# マニフェストファイルのルート
+@app.get("/manifest.json")
+async def serve_manifest():
+    if os.path.exists("static/manifest.json"):
+        return FileResponse("static/manifest.json")
+    return {"error": "Manifest not found"}
+
+# ファビコンのルート
+@app.get("/favicon.ico")
+async def serve_favicon():
+    if os.path.exists("static/favicon.ico"):
+        return FileResponse("static/favicon.ico")
+    return {"error": "Favicon not found"}
 
 # ルートパスでindex.htmlを提供
 @app.get("/")
@@ -57,6 +98,12 @@ async def serve_spa(full_path: str):
     file_path = f"static/{full_path}"
     if os.path.exists(file_path):
         return FileResponse(file_path)
+    
+    # 特定のパターンのファイルパスを確認
+    if full_path.startswith("static/"):
+        direct_path = full_path
+        if os.path.exists(direct_path):
+            return FileResponse(direct_path)
     
     # SPA用のフォールバック
     if os.path.exists("static/index.html"):
