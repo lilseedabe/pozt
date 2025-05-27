@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 
 export const useCanvas = (imageUrl) => {
   const canvasRef = useRef(null);
@@ -8,47 +8,8 @@ export const useCanvas = (imageUrl) => {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   
-  // キャンバス初期化処理
-  useEffect(() => {
-    if (!imageUrl || !canvasRef.current) return;
-    
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    
-    const img = new Image();
-    img.src = imageUrl;
-    img.onload = () => {
-      // キャンバスサイズを画像に合わせる
-      canvas.width = img.width;
-      canvas.height = img.height;
-      setImageSize({ width: img.width, height: img.height });
-      
-      // 画像描画
-      ctx.drawImage(img, 0, 0);
-      
-      // 初期領域を描画
-      drawRegion(ctx, region, img);
-    };
-  }, [imageUrl]);
-  
-  // 領域が変更されたら再描画
-  useEffect(() => {
-    if (!canvasRef.current || !imageUrl) return;
-    
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    
-    const img = new Image();
-    img.src = imageUrl;
-    img.onload = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-      drawRegion(ctx, region, img);
-    };
-  }, [region, imageUrl]);
-  
-  // 領域描画関数
-  const drawRegion = (ctx, regionData, img) => {
+  // 領域描画関数をuseCallbackでメモ化
+  const drawRegion = useCallback((ctx, regionData, img) => {
     const { x, y, width, height } = regionData;
     
     // 画像を再描画
@@ -81,7 +42,46 @@ export const useCanvas = (imageUrl) => {
     ctx.fillStyle = 'white';
     ctx.font = '12px Arial';
     ctx.fillText(`${width}x${height}`, x + 5, y - 6);
-  };
+  }, []);
+  
+  // キャンバス初期化処理
+  useEffect(() => {
+    if (!imageUrl || !canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    const img = new Image();
+    img.src = imageUrl;
+    img.onload = () => {
+      // キャンバスサイズを画像に合わせる
+      canvas.width = img.width;
+      canvas.height = img.height;
+      setImageSize({ width: img.width, height: img.height });
+      
+      // 画像描画
+      ctx.drawImage(img, 0, 0);
+      
+      // 初期領域を描画
+      drawRegion(ctx, region, img);
+    };
+  }, [imageUrl, region, drawRegion]); // 依存配列に region と drawRegion を追加
+  
+  // 領域が変更されたら再描画
+  useEffect(() => {
+    if (!canvasRef.current || !imageUrl) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    const img = new Image();
+    img.src = imageUrl;
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      drawRegion(ctx, region, img);
+    };
+  }, [region, imageUrl, drawRegion]); // drawRegion を依存配列に追加
   
   // マウスダウンイベントハンドラ
   const handleMouseDown = (e) => {
