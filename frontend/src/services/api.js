@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // APIのベースURL
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 // AxiosのデフォルトURLを設定
 const api = axios.create({
