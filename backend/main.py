@@ -29,35 +29,38 @@ app.add_middleware(
 app.include_router(health.router, tags=["Health"])
 app.include_router(image.router, prefix="/api", tags=["Image Processing"])
 
-# 静的ファイルのディレクトリを作成
+# 静的ファイルディレクトリを作成
 os.makedirs("static", exist_ok=True)
-
-# アップロードされた画像のための静的ファイルマウント
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# フロントエンドのReactファイルを提供する静的ファイルマウント
-app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
-
-# ルートパスとその他のパスはindex.htmlにフォールバック
-@app.get("/{full_path:path}")
-async def serve_frontend(full_path: str):
-    # APIエンドポイントは既にルーティングされているので、ここには来ない
-    # 静的ファイルも既にマウントされているので、ここには来ない
-    # それ以外のすべてのパスをindex.htmlにフォールバック
-    return FileResponse("static/index.html")th.router, tags=["Health"])
-app.include_router(image.router, prefix="/api", tags=["Image Processing"])
 
 # 静的ファイルの提供設定
-os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-@app.on_event("startup")
-async def startup_event():
-    """アプリケーション起動時に実行される処理"""
-    # 一時ディレクトリの初期化
-    os.makedirs("static", exist_ok=True)
-    print("pozt API server started successfully")
+# フロントエンドのアセットファイル（JSやCSS）を提供するマウント
+# 注意: フロントエンドのビルド構造によって変更が必要かもしれません
+try:
+    if os.path.exists("static/assets"):
+        app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
+except Exception as e:
+    print(f"アセットマウント中にエラーが発生しました: {e}")
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+# ルートパスでindex.htmlを提供
+@app.get("/")
+async def serve_root():
+    if os.path.exists("static/index.html"):
+        return FileResponse("static/index.html")
+    return {"message": "Welcome to pozt API"}
+
+# その他のパスに対するフォールバック - SPAルーティング用
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    # まず実際のファイルの存在を確認
+    file_path = f"static/{full_path}"
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    
+    # SPA用のフォールバック
+    if os.path.exists("static/index.html"):
+        return FileResponse("static/index.html")
+    
+    # index.htmlも無い場合はAPIのルートを示す
+    return {"error": "Not found", "message": "API endpoints are available at /api"}
