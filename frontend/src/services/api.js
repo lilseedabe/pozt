@@ -49,8 +49,10 @@ export const downloadImage = (filename) => {
   return `${API_URL}/download/${filename}`;
 };
 
-export default {
+const apiService = {
   uploadImage,
   processImage,
   downloadImage
 };
+
+export default apiService;
