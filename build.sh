@@ -11,9 +11,9 @@ pip install -r requirements.txt
 echo "Installing frontend dependencies..."
 cd frontend && npm install
 
-# フロントエンドのビルド - CI=false を追加して警告をエラーとして扱わないようにする
+# フロントエンドのビルド
 echo "Building frontend..."
-CI=false npm run build
+npm run build
 
 # 静的ファイルの準備
 echo "Preparing static directory..."
