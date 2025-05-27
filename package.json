@@ -1,0 +1,19 @@
+{
+  "name": "hidden-image-generator",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT",
+    "build": "cd frontend && npm install && npm run build",
+    "dev:frontend": "cd frontend && npm start",
+    "dev:backend": "cd backend && uvicorn main:app --reload",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
