@@ -19,6 +19,7 @@ npm run build
 echo "Preparing static directory..."
 mkdir -p ../backend/static
 cp -R build/* ../backend/static/
+ls -la ../backend/static/
 
 cd ..
 echo "Build completed successfully!"
