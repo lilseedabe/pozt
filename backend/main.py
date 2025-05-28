@@ -29,11 +29,20 @@ app.include_router(image.router, prefix="/api", tags=["Image"])
 # React ビルド成果物へのパス
 BASE_DIR = os.path.dirname(__file__)
 REACT_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "frontend", "build"))
-STATIC_DIR = os.path.join(REACT_DIR, "static")
+REACT_STATIC_DIR = os.path.join(REACT_DIR, "static")
 
-# 静的ファイル（js/css等）の提供
-if os.path.isdir(STATIC_DIR):
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# アップロードファイル用の静的ディレクトリ
+UPLOAD_STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+# アップロードファイル用の静的ディレクトリを作成
+os.makedirs(UPLOAD_STATIC_DIR, exist_ok=True)
+
+# React の静的ファイル（js/css等）の提供
+if os.path.isdir(REACT_STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=REACT_STATIC_DIR), name="react_static")
+
+# アップロードされた画像ファイルの提供 - より高い優先度で設定
+app.mount("/uploads", StaticFiles(directory=UPLOAD_STATIC_DIR), name="upload_static")
 
 # ルート("/"): React の index.html
 @app.get("/", response_class=HTMLResponse)
@@ -59,7 +68,7 @@ async def docs():
 # SPA フォールバック（React Router 対応）
 @app.get("/{path:path}", response_class=HTMLResponse)
 async def spa(path: str, request: Request):
-    if path.startswith("api") or path.startswith("static"):
+    if path.startswith("api") or path.startswith("static") or path.startswith("uploads"):
         return Response(status_code=404, content="Not Found")
     index_path = os.path.join(REACT_DIR, "index.html")
     if os.path.isfile(index_path):
