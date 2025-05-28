@@ -22,40 +22,62 @@ const ImageUpload = () => {
       return;
     }
 
-    // ファイルサイズチェック（20MB制限）
-    if (file.size > 20 * 1024 * 1024) {
-      setError('ファイルサイズが20MBを超えています');
+    // ファイルサイズチェック（10MB制限に変更）
+    if (file.size > 10 * 1024 * 1024) {
+      setError('ファイルサイズが10MBを超えています。より小さいファイルをご利用ください。');
       return;
     }
     
-    try {
-      setUploading(true);
-      setError(null);
-      setUploadSuccess(false);
+    // 画像の解像度チェック（オプション）
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    
+    img.onload = async () => {
+      URL.revokeObjectURL(objectUrl);
       
-      // APIにアップロード
-      const result = await uploadImage(file);
+      // 巨大な画像の警告（メモリ効率のため）
+      const totalPixels = img.width * img.height;
+      if (totalPixels > 20000000) { // 20MP以上の場合
+        setError(`画像が非常に大きいです (${img.width}×${img.height})。処理に時間がかかる場合があります。より小さい画像を推奨します。`);
+        // 警告のみで処理は続行
+      }
       
-      // 画像URLを生成（修正: /uploads/ を使用）
-      const imageUrl = `${window.location.origin}${result.url}`;
-      
-      // コンテキストに画像情報を設定
-      actions.setImage(result, imageUrl);
-      
-      setUploadSuccess(true);
-      setUploading(false);
-      
-      // 成功メッセージを3秒後に非表示
-      setTimeout(() => {
+      try {
+        setUploading(true);
+        setError(null);
         setUploadSuccess(false);
-      }, 3000);
-      
-    } catch (error) {
-      console.error('Upload error:', error);
-      const errorMessage = error.response?.data?.detail || 'アップロード中にエラーが発生しました';
-      setError(errorMessage);
-      setUploading(false);
-    }
+        
+        // APIにアップロード
+        const result = await uploadImage(file);
+        
+        // 画像URLを生成
+        const imageUrl = `${window.location.origin}${result.url}`;
+        
+        // コンテキストに画像情報を設定
+        actions.setImage(result, imageUrl);
+        
+        setUploadSuccess(true);
+        setUploading(false);
+        
+        // 成功メッセージを3秒後に非表示
+        setTimeout(() => {
+          setUploadSuccess(false);
+        }, 3000);
+        
+      } catch (error) {
+        console.error('Upload error:', error);
+        const errorMessage = error.response?.data?.detail || 'アップロード中にエラーが発生しました';
+        setError(errorMessage);
+        setUploading(false);
+      }
+    };
+    
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      setError('画像ファイルが破損しているか、対応していない形式です');
+    };
+    
+    img.src = objectUrl;
   };
 
   const handleDragOver = (e) => {
@@ -137,7 +159,13 @@ const ImageUpload = () => {
               <span>対応フォーマット: JPG, PNG, GIF, WebP</span>
             </div>
             <div className="upload-specs">
-              <small>最大ファイルサイズ: 20MB</small>
+              <small>最大ファイルサイズ: 10MB | 出力サイズ: 2430×3240px (高品質)</small>
+            </div>
+            <div className="optimization-notice">
+              <small>
+                💡 <strong>メモリ最適化:</strong> 高品質(2430×3240px)を維持しつつ、
+                プレビューを1つに集約してメモリ効率化を実現
+              </small>
             </div>
           </div>
         )}
