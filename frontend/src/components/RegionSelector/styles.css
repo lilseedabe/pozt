@@ -272,6 +272,18 @@
 }
 
 /* サイズ調整 */
+.size-control-group {
+  margin-bottom: var(--space-md);
+}
+
+.size-control-label {
+  display: block;
+  margin-bottom: var(--space-sm);
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
 .size-controls {
   display: flex;
   flex-direction: column;
