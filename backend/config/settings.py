@@ -30,19 +30,19 @@ STRIPE_METHODS = {
     "hybrid": "混合モード（可変比率）"
 }
 
-# 強度マッピングの修正版（全て大幅に増加）
+# Gradioコードと完全に同じ強度マッピング
 STRENGTH_MAP = {
-    "high_frequency": 0.015,        # 0.015 → 0.25 (16倍)
-    "adaptive": 0.02,               # 0.02 → 0.3 (15倍)
-    "adaptive_subtle": 0.015,        # 0.015 → 0.2 (13倍)
-    "adaptive_strong": 0.03,        # 0.03 → 0.4 (13倍)
-    "adaptive_minimal": 0.01,      # 0.01 → 0.15 (15倍)
-    "perfect_subtle": 0.025,        # 0.025 → 0.35 (14倍)
-    "ultra_subtle": 0.02,          # 0.02 → 0.25 (12倍)
-    "near_perfect": 0.018,          # 0.018 → 0.22 (12倍)
-    "color_preserving": 0.025,      # 0.025 → 0.35 (14倍)
-    "hue_preserving": 0.02,        # 0.02 → 0.25 (12倍)
-    "blended": 0.022                 # 0.022 → 0.3 (13倍)
+    "high_frequency": 0.015,    # 超高周波モード（強度を上げる）
+    "adaptive": 0.02,           # 標準
+    "adaptive_subtle": 0.015,   # 控えめ
+    "adaptive_strong": 0.03,    # 強め
+    "adaptive_minimal": 0.01,   # 最小
+    "perfect_subtle": 0.025,    # 弱めに調整
+    "ultra_subtle": 0.02,       # 弱めに調整
+    "near_perfect": 0.018,      # 弱めに調整
+    "color_preserving": 0.025,  # 色調保存モード
+    "hue_preserving": 0.02,     # 色相保存モード
+    "blended": 0.022           # ブレンドモード
 }
 
 # リサイズ方法
