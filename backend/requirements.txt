@@ -1,4 +1,4 @@
-# 高速化・メモリ最適化版 requirements.txt
+# 安定版 requirements.txt（高速化・メモリ最適化・Numba削除）
 fastapi==0.104.1
 uvicorn[standard]==0.23.2
 python-multipart==0.0.6
@@ -10,9 +10,8 @@ python-dotenv==1.0.0
 pydantic==1.10.8
 psutil==5.9.5
 
-# 高速化ライブラリ
-numba==0.58.1     # JITコンパイルで数値計算を10-50倍高速化
-# concurrent.futures は Python標準ライブラリなので追加不要
+# Numbaを削除（安定性重視）
+# numba==0.58.1  # 削除：コンパイルエラーやデプロイ問題を回避
 
 # 削除されたライブラリ（メモリ節約）
 # scipy>=1.10.0  # 削除：40MB節約
