@@ -18,8 +18,6 @@ const RegionSelector = () => {
     setRegionSize,
     moveRegion
   } = useCanvas(imageUrl);
-  
-  const [sizeBtnActive, setSizeBtnActive] = useState('medium');
 
   // 領域が変更されたらアプリコンテキストを更新
   useEffect(() => {
@@ -27,12 +25,6 @@ const RegionSelector = () => {
       actions.setRegion(region);
     }
   }, [region, actions]);
-  
-  // サイズプリセットの設定
-  const handleSizePreset = (size, width, height) => {
-    setRegionSize(width, height);
-    setSizeBtnActive(size);
-  };
 
   if (!imageUrl) {
     return <div className="region-selector-empty">画像をアップロードしてください</div>;
@@ -53,18 +45,18 @@ const RegionSelector = () => {
         <div className="control-section">
           <h3>位置の調整</h3>
           <div className="direction-controls">
-            <button className="direction-btn" onClick={() => moveRegion('up')}>
+            <button className="direction-btn up" onClick={() => moveRegion('up')}>
               <FiArrowUp />
             </button>
             <div className="horizontal-controls">
-              <button className="direction-btn" onClick={() => moveRegion('left')}>
+              <button className="direction-btn left" onClick={() => moveRegion('left')}>
                 <FiArrowLeft />
               </button>
-              <button className="direction-btn" onClick={() => moveRegion('right')}>
+              <button className="direction-btn right" onClick={() => moveRegion('right')}>
                 <FiArrowRight />
               </button>
             </div>
-            <button className="direction-btn" onClick={() => moveRegion('down')}>
+            <button className="direction-btn down" onClick={() => moveRegion('down')}>
               <FiArrowDown />
             </button>
           </div>
@@ -93,29 +85,28 @@ const RegionSelector = () => {
         
         <div className="control-section">
           <h3>サイズ調整</h3>
-          <div className="size-presets">
-            <button 
-              className={`size-btn ${sizeBtnActive === 'small' ? 'active' : ''}`}
-              onClick={() => handleSizePreset('small', 100, 100)}
-            >
-              小 (100x100)
-            </button>
-            <button 
-              className={`size-btn ${sizeBtnActive === 'medium' ? 'active' : ''}`}
-              onClick={() => handleSizePreset('medium', 150, 150)}
-            >
-              中 (150x150)
-            </button>
-            <button 
-              className={`size-btn ${sizeBtnActive === 'large' ? 'active' : ''}`}
-              onClick={() => handleSizePreset('large', 250, 250)}
-            >
-              大 (250x250)
-            </button>
-          </div>
-          
-          <div className="region-info">
-            <p>選択領域: X={region.x}, Y={region.y}, 幅={region.width}, 高さ={region.height}</p>
+          <div className="size-controls">
+            <div className="size-display">
+              <span className="size-label">小</span>
+              <span className="size-value">{region.width}×{region.height}</span>
+              <span className="size-label">大</span>
+            </div>
+            <input 
+              type="range" 
+              min="50" 
+              max="400" 
+              step="10"
+              value={region.width} 
+              onChange={(e) => {
+                const newSize = parseInt(e.target.value);
+                setRegionSize(newSize, newSize);
+              }}
+              className="size-slider"
+            />
+            
+            <div className="region-info">
+              <p>選択領域: X={region.x}, Y={region.y}, 幅={region.width}, 高さ={region.height}</p>
+            </div>
           </div>
         </div>
       </div>
