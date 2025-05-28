@@ -32,15 +32,37 @@ export const processImage = async (params) => {
   try {
     const formData = new FormData();
     
-    // オブジェクトのキーと値をFormDataに追加
+    // パラメータの型を適切に変換して追加
     Object.keys(params).forEach(key => {
-      formData.append(key, params[key]);
+      let value = params[key];
+      
+      // boolean値を文字列に変換
+      if (typeof value === 'boolean') {
+        value = value.toString();
+      }
+      // number値を文字列に変換
+      else if (typeof value === 'number') {
+        value = value.toString();
+      }
+      
+      formData.append(key, value);
     });
     
-    const response = await api.post('/process', formData);
+    console.log('Sending FormData with params:', Object.fromEntries(formData));
+    
+    const response = await api.post('/process', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
     return response.data;
   } catch (error) {
     console.error('Error processing image:', error);
+    // より詳細なエラー情報を提供
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
     throw error;
   }
 };
