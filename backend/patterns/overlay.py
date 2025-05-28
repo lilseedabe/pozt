@@ -1,84 +1,61 @@
-# patterns/overlay.py の完全版（隠蔽効果強化版）
+# patterns/overlay.py - Gradioコードの数値に完全準拠
 
 import numpy as np
 import cv2
 from core.image_utils import ensure_array, get_grayscale
 
-def create_overlay_moire_pattern(hidden_img, pattern_type="horizontal", overlay_opacity=0.3):
-    """隠蔽効果強化版：オーバーレイモアレパターン生成"""
-    hidden_array = ensure_array(hidden_img).astype(np.uint8)
+def create_overlay_moire_pattern(hidden_img, pattern_type="horizontal", overlay_opacity=0.6):
+    """
+    重ね合わせモード：均一な縞模様の上に隠し画像をグレーで重ねる
+    （Gradioコードと完全に同じ実装）
+    """
+    if isinstance(hidden_img, np.ndarray):
+        hidden_array = hidden_img.astype(np.float32)
+    else:
+        hidden_array = np.array(hidden_img).astype(np.float32)
+    
     height, width = hidden_array.shape[:2]
     
-    # グレースケール化（OpenCV高速実装）
+    # カラー画像をグレースケールに変換
     if len(hidden_array.shape) == 3:
-        hidden_gray = cv2.cvtColor(hidden_array, cv2.COLOR_RGB2GRAY)
+        hidden_gray = cv2.cvtColor(hidden_array.astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)
     else:
         hidden_gray = hidden_array
     
-    # 隠し画像を二値化 - より厳しい閾値で隠蔽効果強化
-    _, binary_mask = cv2.threshold(hidden_gray, 140, 255, cv2.THRESH_BINARY_INV)  # 120→140
+    # 隠し画像の前処理 - 輪郭を強調し、コントラストを調整
+    hidden_norm = hidden_gray / 255.0
     
-    # マスクをより強くぼかして隠蔽効果強化
-    blurred_mask = cv2.GaussianBlur(binary_mask, (9, 9), 0)  # (5,5)→(9,9)
+    # 隠し画像を二値化 - 黒い部分（暗い部分）だけを抽出
+    _, binary_mask = cv2.threshold(hidden_gray, 100, 255, cv2.THRESH_BINARY_INV)
     
-    # マスクを正規化（より控えめに）
-    mask = (blurred_mask.astype(np.float32) / 255.0) * overlay_opacity
+    # マスクをぼかして滑らかにする
+    blurred_mask = cv2.GaussianBlur(binary_mask, (5, 5), 0)
     
-    # 結果画像を初期化
-    result = np.zeros((height, width, 3), dtype=np.uint8)
+    # マスクを正規化（0-1の範囲に）
+    mask = blurred_mask / 255.0 * overlay_opacity
     
-    # 控えめなコントラストの値（隠蔽効果重視）
-    base_gray = 128
-    stripe_range = 18     # より控えめに (40→18)
-    stripe_dark = base_gray - stripe_range   # 110
-    stripe_light = base_gray + stripe_range  # 146
-    gray_value = 128.0   # 中間グレー
+    # 均一な縞模様を作成
+    stripes = np.zeros((height, width, 3), dtype=np.uint8)
     
     if pattern_type == "horizontal":
-        # 横縞パターン（隠蔽効果強化版）
+        # 横縞パターン
         for y in range(height):
-            # 基本縞模様（より控えめなコントラスト）
-            stripe_value = stripe_light if (y % 2) == 0 else stripe_dark
-            
-            # 行全体を一括処理（ベクトル化）
-            mask_row = mask[y, :]
-            
-            # より隠蔽効果の高い合成
-            # マスクされた部分は隠し画像の影響を受け、そうでない部分は縞模様
-            final_values = stripe_value * (1.0 - mask_row) + gray_value * mask_row
-            
-            # 隠し画像の明度情報をより控えめに追加
-            brightness_adjustment = (hidden_gray[y, :].astype(np.float32) - 128) * 0.15  # 0.3→0.15に削減
-            final_values = final_values + brightness_adjustment * mask_row
-            
-            final_values = np.clip(final_values, 100, 155).astype(np.uint8)  # 範囲を制限
-            
-            # 全チャンネルに同じ値を設定
-            result[y, :, 0] = final_values
-            result[y, :, 1] = final_values
-            result[y, :, 2] = final_values
-    
-    else:  # vertical
-        # 縦縞パターン（隠蔽効果強化版）
+            # 1ピクセル幅の縞（完全な白黒）
+            stripe_value = 255 if y % 2 == 0 else 0
+            stripes[y, :] = [stripe_value, stripe_value, stripe_value]
+    else:
+        # 縦縞パターン
         for x in range(width):
-            # 基本縞模様（より控えめなコントラスト）
-            stripe_value = stripe_light if (x % 2) == 0 else stripe_dark
-            
-            # 列全体を一括処理（ベクトル化）
-            mask_col = mask[:, x]
-            
-            # より隠蔽効果の高い合成
-            final_values = stripe_value * (1.0 - mask_col) + gray_value * mask_col
-            
-            # 隠し画像の明度情報をより控えめに追加
-            brightness_adjustment = (hidden_gray[:, x].astype(np.float32) - 128) * 0.15
-            final_values = final_values + brightness_adjustment * mask_col
-            
-            final_values = np.clip(final_values, 100, 155).astype(np.uint8)  # 範囲を制限
-            
-            # 全チャンネルに同じ値を設定
-            result[:, x, 0] = final_values
-            result[:, x, 1] = final_values
-            result[:, x, 2] = final_values
+            stripe_value = 255 if x % 2 == 0 else 0
+            stripes[:, x] = [stripe_value, stripe_value, stripe_value]
     
-    return result
+    # 均一なグレー（隠し画像の部分を上書きするため）
+    gray = np.ones((height, width, 3), dtype=np.float32) * 128
+    
+    # マスクを使って縞模様とグレーを合成
+    # マスク値が大きいほどグレーが強く、小さいほど縞模様が強く出る
+    result = np.zeros((height, width, 3), dtype=np.float32)
+    for i in range(3):
+        result[:,:,i] = stripes[:,:,i] * (1 - mask) + gray[:,:,i] * mask
+    
+    return result.astype(np.uint8)
