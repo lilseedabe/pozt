@@ -2,10 +2,13 @@ services:
   - type: web
     name: pozt
     env: python
-    buildCommand: |
-      pip install -r requirements.txt
-      cd frontend && npm install && npm run build && cp -r build/* ../backend/static/
-    startCommand: cd backend && PYTHONPATH=$PYTHONPATH:$(pwd) python -m uvicorn main:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 120 --proxy-headers
+    buildCommand: ./build.sh
+    startCommand: >
+      cd backend &&
+      PYTHONPATH=$PYTHONPATH:$(pwd)
+      python -m uvicorn main:app
+      --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: 3.9.0
+        value: "3.9.0"
+
