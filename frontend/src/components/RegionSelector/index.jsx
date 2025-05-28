@@ -86,23 +86,41 @@ const RegionSelector = () => {
         <div className="control-section">
           <h3>サイズ調整</h3>
           <div className="size-controls">
-            <div className="size-display">
-              <span className="size-label">小</span>
-              <span className="size-value">{region.width}×{region.height}</span>
-              <span className="size-label">大</span>
+            <div className="size-control-group">
+              <label className="size-control-label">
+                幅: {region.width}px
+              </label>
+              <input 
+                type="range" 
+                min="50" 
+                max="400" 
+                step="10"
+                value={region.width} 
+                onChange={(e) => {
+                  const newWidth = parseInt(e.target.value);
+                  setRegionSize(newWidth, region.height);
+                }}
+                className="size-slider"
+              />
             </div>
-            <input 
-              type="range" 
-              min="50" 
-              max="400" 
-              step="10"
-              value={region.width} 
-              onChange={(e) => {
-                const newSize = parseInt(e.target.value);
-                setRegionSize(newSize, newSize);
-              }}
-              className="size-slider"
-            />
+            
+            <div className="size-control-group">
+              <label className="size-control-label">
+                高さ: {region.height}px
+              </label>
+              <input 
+                type="range" 
+                min="50" 
+                max="400" 
+                step="10"
+                value={region.height} 
+                onChange={(e) => {
+                  const newHeight = parseInt(e.target.value);
+                  setRegionSize(region.width, newHeight);
+                }}
+                className="size-slider"
+              />
+            </div>
             
             <div className="region-info">
               <p>選択領域: X={region.x}, Y={region.y}, 幅={region.width}, 高さ={region.height}</p>
