@@ -55,20 +55,72 @@ async def process_image(
     pattern_type: str = Form("horizontal"),
     stripe_method: str = Form("overlay"),
     resize_method: str = Form("contain"),
-    add_border: bool = Form(True),
+    add_border: str = Form("true"),  # 文字列として受信
     border_width: int = Form(3),
     overlay_ratio: float = Form(0.4),
     settings: Settings = Depends(get_api_settings)
 ):
-    """画像を処理してモアレ効果を適用"""
+    """画像を処理してモアレ効果を適用（エラー修正版）"""
     try:
-        # ファイルパスの取得
-        file_path = get_file_path(filename)
-        if not os.path.exists(file_path):
-            raise HTTPException(status_code=404, detail="File not found")
+        # デバッグ用ログ
+        print(f"🚀 Process request received:")
+        print(f"  filename: {filename}")
+        print(f"  region: ({region_x}, {region_y}, {region_width}, {region_height})")
+        print(f"  pattern_type: {pattern_type}")
+        print(f"  stripe_method: {stripe_method}")
+        print(f"  resize_method: {resize_method}")
+        print(f"  add_border: {add_border} (type: {type(add_border)})")
+        print(f"  border_width: {border_width}")
+        print(f"  overlay_ratio: {overlay_ratio}")
         
-        # 領域情報の構築
+        # ファイルパスの取得と確認
+        file_path = get_file_path(filename)
+        print(f"  file_path: {file_path}")
+        
+        if not os.path.exists(file_path):
+            print(f"❌ File not found: {file_path}")
+            raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+        
+        # ファイルサイズとアクセス権確認
+        file_size = os.path.getsize(file_path)
+        print(f"  file_size: {file_size} bytes")
+        
+        # 領域情報の構築と検証
         region = (region_x, region_y, region_width, region_height)
+        
+        # 領域の妥当性チェック
+        if region_width <= 0 or region_height <= 0:
+            raise HTTPException(status_code=400, detail="Invalid region dimensions")
+        
+        if region_x < 0 or region_y < 0:
+            raise HTTPException(status_code=400, detail="Invalid region position")
+        
+        # boolean値の変換（文字列から真偽値へ）
+        add_border_bool = add_border.lower() in ('true', '1', 'yes', 'on')
+        print(f"  add_border_bool: {add_border_bool}")
+        
+        # 処理パラメータの検証
+        valid_pattern_types = ["horizontal", "vertical"]
+        if pattern_type not in valid_pattern_types:
+            pattern_type = "horizontal"
+            print(f"  Invalid pattern_type, using default: {pattern_type}")
+        
+        valid_stripe_methods = [
+            "overlay", "high_frequency", "moire_pattern", "adaptive", 
+            "adaptive_subtle", "adaptive_strong", "adaptive_minimal",
+            "perfect_subtle", "ultra_subtle", "near_perfect",
+            "color_preserving", "hue_preserving", "blended", "hybrid_overlay"
+        ]
+        if stripe_method not in valid_stripe_methods:
+            stripe_method = "overlay"
+            print(f"  Invalid stripe_method, using default: {stripe_method}")
+        
+        valid_resize_methods = ["contain", "cover", "stretch"]
+        if resize_method not in valid_resize_methods:
+            resize_method = "contain"
+            print(f"  Invalid resize_method, using default: {resize_method}")
+        
+        print(f"✅ Starting image processing...")
         
         # 画像処理の実行
         result_files = process_hidden_image(
@@ -77,27 +129,75 @@ async def process_image(
             pattern_type,
             stripe_method,
             resize_method,
-            add_border,
+            add_border_bool,
             border_width,
             overlay_ratio
         )
         
+        print(f"✅ Processing completed. Result: {result_files}")
+        
+        # 結果ファイルの存在確認
+        if not result_files or "result" not in result_files:
+            raise HTTPException(status_code=500, detail="Processing failed: No result generated")
+        
+        result_filename = result_files["result"]
+        result_file_path = get_file_path(result_filename)
+        
+        if not os.path.exists(result_file_path):
+            print(f"❌ Result file not found: {result_file_path}")
+            raise HTTPException(status_code=500, detail="Processing failed: Result file not created")
+        
+        result_file_size = os.path.getsize(result_file_path)
+        print(f"✅ Result file created: {result_filename} ({result_file_size} bytes)")
+        
         # 古いファイルのクリーンアップをバックグラウンドで実行
         background_tasks.add_task(delete_old_files, settings.TEMP_FILE_EXPIRY)
         
-        # 結果のURLを構築 - /uploads/ に変更
+        # 結果のURLを構築
         result_urls = {
-            key: f"/uploads/{os.path.basename(path)}" 
-            for key, path in result_files.items()
+            "result": f"/uploads/{result_filename}"
         }
         
-        return {
+        print(f"✅ Processing completed successfully. URLs: {result_urls}")
+        
+        # レスポンスを構築
+        response_data = {
             "success": True,
             "urls": result_urls,
-            "message": "処理が完了しました"
+            "message": "処理が完了しました",
+            "processing_info": {
+                "filename": result_filename,
+                "file_size": result_file_size,
+                "pattern_type": pattern_type,
+                "stripe_method": stripe_method
+            }
         }
+        
+        print(f"📤 Sending response: {response_data}")
+        
+        return response_data
+        
+    except HTTPException:
+        # HTTPExceptionはそのまま再発生
+        raise
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Unexpected processing error: {str(e)}")
+        print(f"❌ Error type: {type(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # 詳細なエラー情報を含むレスポンス
+        error_detail = {
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "processing_stage": "unknown"
+        }
+        
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Processing failed: {str(e)}"
+        )
 
 @router.get("/download/{filename}")
 async def download_image(filename: str):
