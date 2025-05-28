@@ -1,11 +1,11 @@
-# patterns/moire.py のシンプル版（Numbaなしで安定性重視）
+# patterns/moire.py の修正版
 
 import numpy as np
 import cv2
 from core.image_utils import ensure_array, get_grayscale
 
-def create_fast_moire_stripes(hidden_img, pattern_type="horizontal", strength=0.02):
-    """高速化されたモアレ縞模様生成（Numbaなし・安定版）"""
+def create_fast_moire_stripes(hidden_img, pattern_type="horizontal", strength=0.3):
+    """修正版：高速化されたモアレ縞模様生成"""
     hidden_array = ensure_array(hidden_img).astype(np.uint8)
     height, width = hidden_array.shape[:2]
     
@@ -15,45 +15,47 @@ def create_fast_moire_stripes(hidden_img, pattern_type="horizontal", strength=0.
     else:
         hidden_gray = hidden_array
     
-    # 正規化とコントラスト強調（ベクトル化）
+    # 正規化とコントラスト強調（より強い効果）
     hidden_norm = hidden_gray.astype(np.float32) / 255.0
-    hidden_contrast = np.clip((hidden_norm - 0.5) * 2.0 + 0.5, 0, 1)
+    hidden_contrast = np.clip((hidden_norm - 0.5) * 3.0 + 0.5, 0, 1)  # 強化
     
     # 結果画像を初期化
     result = np.zeros((height, width, 3), dtype=np.uint8)
     
+    # 縞模様の基本値（より強いコントラスト）
+    dark_value = 50   # より暗く
+    light_value = 205  # より明るく
+    
     if pattern_type == "horizontal":
-        # 横縞（水平方向の縞）- ベクトル化で高速化
+        # 横縞（水平方向の縞）- 修正版
         for y in range(height):
-            base_stripe = (y % 2) * 255
-            # 行全体を一括処理（ベクトル化）
-            pixel_brightness = hidden_contrast[y, :]
+            # 基本縞模様（1ピクセル単位で交互）
+            base_stripe = light_value if (y % 2) == 0 else dark_value
             
-            if base_stripe == 255:
-                adjustment = (pixel_brightness - 0.5) * strength * 255
-                stripe_values = np.clip(255 + adjustment, 0, 255)
-            else:
-                adjustment = (pixel_brightness - 0.5) * strength * 255
-                stripe_values = np.clip(0 + adjustment, 0, 255)
+            # 隠し画像の影響を計算（より強く）
+            pixel_brightness = hidden_contrast[y, :]
+            adjustment = (pixel_brightness - 0.5) * strength * 255
+            
+            # 最終的な値を計算
+            stripe_values = np.clip(base_stripe + adjustment, 0, 255)
             
             # 全チャンネルに同じ値を設定
             result[y, :, 0] = stripe_values
-            result[y, :, 1] = stripe_values
+            result[y, :, 1] = stripe_values  
             result[y, :, 2] = stripe_values
     
     elif pattern_type == "vertical":
-        # 縦縞（垂直方向の縞）- ベクトル化で高速化
+        # 縦縞（垂直方向の縞）- 修正版
         for x in range(width):
-            base_stripe = (x % 2) * 255
-            # 列全体を一括処理（ベクトル化）
-            pixel_brightness = hidden_contrast[:, x]
+            # 基本縞模様（1ピクセル単位で交互）
+            base_stripe = light_value if (x % 2) == 0 else dark_value
             
-            if base_stripe == 255:
-                adjustment = (pixel_brightness - 0.5) * strength * 255
-                stripe_values = np.clip(255 + adjustment, 0, 255)
-            else:
-                adjustment = (pixel_brightness - 0.5) * strength * 255
-                stripe_values = np.clip(0 + adjustment, 0, 255)
+            # 隠し画像の影響を計算（より強く）
+            pixel_brightness = hidden_contrast[:, x]
+            adjustment = (pixel_brightness - 0.5) * strength * 255
+            
+            # 最終的な値を計算
+            stripe_values = np.clip(base_stripe + adjustment, 0, 255)
             
             # 全チャンネルに同じ値を設定
             result[:, x, 0] = stripe_values
@@ -62,8 +64,8 @@ def create_fast_moire_stripes(hidden_img, pattern_type="horizontal", strength=0.
     
     return result
 
-def create_fast_high_frequency_stripes(hidden_img, pattern_type="horizontal", strength=0.015):
-    """高速化された高周波縞模様生成（Numbaなし・安定版）"""
+def create_fast_high_frequency_stripes(hidden_img, pattern_type="horizontal", strength=0.25):
+    """修正版：高速化された高周波縞模様生成"""
     hidden_array = ensure_array(hidden_img).astype(np.uint8)
     height, width = hidden_array.shape[:2]
     
@@ -73,32 +75,27 @@ def create_fast_high_frequency_stripes(hidden_img, pattern_type="horizontal", st
     else:
         hidden_gray = hidden_array
     
-    # 隠し画像のコントラスト強調
+    # 隠し画像のコントラスト強調（より強く）
     hidden_norm = hidden_gray.astype(np.float32) / 255.0
-    hidden_contrast = np.clip((hidden_norm - 0.5) * 2.5 + 0.5, 0, 1)
+    hidden_contrast = np.clip((hidden_norm - 0.5) * 4.0 + 0.5, 0, 1)  # さらに強化
     
     # 結果画像を初期化
     result = np.zeros((height, width, 3), dtype=np.uint8)
     
-    # 縞模様の基本値
-    dark_value = 110
-    light_value = 146
+    # 縞模様の基本値（より強いコントラスト）
+    dark_value = 80
+    light_value = 175
     
     if pattern_type == "horizontal":
-        # 横縞パターン
+        # 横縞パターン（より細かい縞）
         for y in range(height):
-            # 2倍の周波数で縞模様を生成
-            base_stripe = 1 if ((y * 2) % 2) == 0 else 0
+            # 基本縞模様
+            base_stripe = light_value if (y % 2) == 0 else dark_value
             
-            # 行全体を一括処理
+            # 隠し画像の影響を適用
             pixel_brightness = hidden_contrast[y, :]
-            
-            if base_stripe == 1:
-                adjustment = (pixel_brightness - 0.5) * strength * 255
-                stripe_values = np.clip(light_value + adjustment, 90, 166)
-            else:
-                adjustment = (pixel_brightness - 0.5) * strength * 255
-                stripe_values = np.clip(dark_value + adjustment, 90, 166)
+            adjustment = (pixel_brightness - 0.5) * strength * 255
+            stripe_values = np.clip(base_stripe + adjustment, 20, 235)
             
             # 全チャンネルに同じ値を設定
             result[y, :, 0] = stripe_values
@@ -108,17 +105,11 @@ def create_fast_high_frequency_stripes(hidden_img, pattern_type="horizontal", st
     elif pattern_type == "vertical":
         # 縦縞パターン
         for x in range(width):
-            base_stripe = 1 if ((x * 2) % 2) == 0 else 0
+            base_stripe = light_value if (x % 2) == 0 else dark_value
             
-            # 列全体を一括処理
             pixel_brightness = hidden_contrast[:, x]
-            
-            if base_stripe == 1:
-                adjustment = (pixel_brightness - 0.5) * strength * 255
-                stripe_values = np.clip(light_value + adjustment, 90, 166)
-            else:
-                adjustment = (pixel_brightness - 0.5) * strength * 255
-                stripe_values = np.clip(dark_value + adjustment, 90, 166)
+            adjustment = (pixel_brightness - 0.5) * strength * 255
+            stripe_values = np.clip(base_stripe + adjustment, 20, 235)
             
             # 全チャンネルに同じ値を設定
             result[:, x, 0] = stripe_values
@@ -127,25 +118,25 @@ def create_fast_high_frequency_stripes(hidden_img, pattern_type="horizontal", st
     
     return result
 
-# 既存関数のエイリアス（互換性維持）
+# 既存関数のエイリアス（互換性維持・強度調整）
 def create_adaptive_moire_stripes(hidden_img, pattern_type="horizontal", mode="adaptive"):
-    """適応型モアレ縞模様（高速版）"""
+    """適応型モアレ縞模様（修正版）"""
     strength_map = {
-        "adaptive": 0.02,
-        "adaptive_subtle": 0.015,
-        "adaptive_strong": 0.03,
-        "adaptive_minimal": 0.01,
-        "perfect_subtle": 0.025,
-        "ultra_subtle": 0.02,
-        "near_perfect": 0.018,
+        "adaptive": 0.25,           # 大幅増加
+        "adaptive_subtle": 0.2,     # 大幅増加
+        "adaptive_strong": 0.35,    # 大幅増加
+        "adaptive_minimal": 0.15,   # 大幅増加
+        "perfect_subtle": 0.3,      # 大幅増加
+        "ultra_subtle": 0.25,       # 大幅増加
+        "near_perfect": 0.22,       # 大幅増加
     }
-    strength = strength_map.get(mode, 0.02)
+    strength = strength_map.get(mode, 0.25)
     return create_fast_moire_stripes(hidden_img, pattern_type, strength)
 
-def create_high_frequency_moire_stripes(hidden_img, pattern_type="horizontal", strength=0.015):
-    """高周波モアレ縞模様（高速版）"""
+def create_high_frequency_moire_stripes(hidden_img, pattern_type="horizontal", strength=0.25):
+    """高周波モアレ縞模様（修正版）"""
     return create_fast_high_frequency_stripes(hidden_img, pattern_type, strength)
 
-def create_moire_hidden_stripes(hidden_img, pattern_type="horizontal", strength=0.02):
-    """基本モアレ縞模様（互換性維持）"""
+def create_moire_hidden_stripes(hidden_img, pattern_type="horizontal", strength=0.25):
+    """基本モアレ縞模様（修正版）"""
     return create_fast_moire_stripes(hidden_img, pattern_type, strength)
