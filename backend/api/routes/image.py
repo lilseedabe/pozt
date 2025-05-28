@@ -39,7 +39,7 @@ async def upload_image(
             "filename": filename,
             "width": image.width,
             "height": image.height,
-            "url": f"/static/{filename}"
+            "url": f"/uploads/{filename}"  # /uploads/ に変更
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -85,9 +85,9 @@ async def process_image(
         # 古いファイルのクリーンアップをバックグラウンドで実行
         background_tasks.add_task(delete_old_files, settings.TEMP_FILE_EXPIRY)
         
-        # 結果のURLを構築
+        # 結果のURLを構築 - /uploads/ に変更
         result_urls = {
-            key: f"/static/{os.path.basename(path)}" 
+            key: f"/uploads/{os.path.basename(path)}" 
             for key, path in result_files.items()
         }
         
