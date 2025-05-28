@@ -14,30 +14,70 @@ const Preview = () => {
   
   return (
     <div className="preview">
-      <h3>多段階プレビュー</h3>
-      <div className="preview-grid">
-        <div className="preview-card">
-          <h4>画像圧縮時</h4>
-          <p>画像圧縮により縞模様が潰れて均一なグレーに</p>
+      <h3>生成結果プレビュー</h3>
+      <div className="preview-single">
+        <div className="preview-card main-result">
+          <h4>高品質モアレ画像 (2430×3240px)</h4>
+          <p>生成された隠し画像の最終版です。拡大縮小や表示環境の変化でモアレ効果が現れます。</p>
           <div className="preview-image">
-            <img src={urls.x_post} alt="圧縮効果シミュレーション" />
+            <img src={urls.result} alt="生成結果" />
+          </div>
+          
+          <div className="result-details">
+            <div className="detail-item">
+              <strong>出力サイズ:</strong> 2430×3240ピクセル (約8MP)
+            </div>
+            <div className="detail-item">
+              <strong>効果:</strong> 表示解像度との干渉でモアレパターンが発生
+            </div>
+            <div className="detail-item">
+              <strong>使用方法:</strong> 拡大縮小、印刷、デジタル表示で異なる見え方を楽しめます
+            </div>
           </div>
         </div>
         
-        <div className="preview-card">
-          <h4>4K読み込み時</h4>
-          <p>縞模様が復活、わずかな変調が見える</p>
-          <div className="preview-image">
-            <img src={urls.view_4k} alt="4K表示" />
+        <div className="usage-guide">
+          <h4>🎨 効果の楽しみ方</h4>
+          <div className="usage-methods">
+            <div className="usage-method">
+              <div className="method-icon">🖥️</div>
+              <div className="method-content">
+                <h5>デジタル表示</h5>
+                <p>ブラウザで拡大縮小することでモアレ効果を確認できます</p>
+              </div>
+            </div>
+            
+            <div className="usage-method">
+              <div className="method-icon">📱</div>
+              <div className="method-content">
+                <h5>SNS投稿</h5>
+                <p>画像圧縮により隠し画像が目立たなくなる効果を体験</p>
+              </div>
+            </div>
+            
+            <div className="usage-method">
+              <div className="method-icon">🖨️</div>
+              <div className="method-content">
+                <h5>高品質印刷</h5>
+                <p>大判印刷時に最も鮮明なモアレ効果が現れます</p>
+              </div>
+            </div>
+            
+            <div className="usage-method">
+              <div className="method-icon">🔍</div>
+              <div className="method-content">
+                <h5>4K/8K表示</h5>
+                <p>高解像度ディスプレイで縞模様の詳細を確認</p>
+              </div>
+            </div>
           </div>
         </div>
-        
-        <div className="preview-card">
-          <h4>4K拡大時</h4>
-          <p>モアレ効果で隠し画像が鮮明に現れる</p>
-          <div className="preview-image">
-            <img src={urls.zoom} alt="拡大表示" />
-          </div>
+      </div>
+      
+      <div className="optimization-info">
+        <div className="info-badge">
+          <span className="badge-icon">⚡</span>
+          <span className="badge-text">メモリ最適化: プレビューを1つに集約し、2430×3240pxの高品質を維持</span>
         </div>
       </div>
     </div>
