@@ -29,7 +29,10 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1 className="app-title">pozt</h1>
+        <div className="app-title-container">
+          <h1 className="app-title">pozt</h1>
+          <div className="app-title-bar"></div>
+        </div>
         <p className="app-subtitle">Pattern Optical Zone Technology - 視覚の魔法を体験しよう</p>
       </header>
 
