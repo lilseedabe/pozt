@@ -1,10 +1,18 @@
+# 高速化・メモリ最適化版 requirements.txt
 fastapi==0.104.1
 uvicorn[standard]==0.23.2
 python-multipart==0.0.6
 numpy==1.24.0
 pillow==9.5.0
-opencv-python-headless==4.8.0.76  # headless版で軽量化
+opencv-python-headless==4.8.0.76
 aiofiles==23.2.1
 python-dotenv==1.0.0
 pydantic==1.10.8
-psutil==5.9.5  # メモリ監視用
+psutil==5.9.5
+
+# 高速化ライブラリ
+numba==0.58.1     # JITコンパイルで数値計算を10-50倍高速化
+# concurrent.futures は Python標準ライブラリなので追加不要
+
+# 削除されたライブラリ（メモリ節約）
+# scipy>=1.10.0  # 削除：40MB節約
