@@ -26,6 +26,11 @@ def get_cached_pattern_config(stripe_method: str):
         "adaptive": {"base_method": "adaptive", "overlay_weight": 0.35, "base_weight": 0.65},
         "adaptive_subtle": {"base_method": "adaptive_subtle", "overlay_weight": 0.35, "base_weight": 0.65},
         "adaptive_strong": {"base_method": "adaptive_strong", "overlay_weight": 0.35, "base_weight": 0.65},
+        "moire_pattern": {"base_method": "moire_pattern", "overlay_weight": 0.4, "base_weight": 0.6},
+        "color_preserving": {"base_method": "color_preserving", "overlay_weight": 0.3, "base_weight": 0.7},
+        "hue_preserving": {"base_method": "hue_preserving", "overlay_weight": 0.3, "base_weight": 0.7},
+        "blended": {"base_method": "blended", "overlay_weight": 0.5, "base_weight": 0.5},
+        "hybrid_overlay": {"base_method": "adaptive", "overlay_weight": 0.4, "base_weight": 0.6},
     }
     return configs.get(stripe_method, configs["adaptive"])
 
@@ -41,104 +46,80 @@ def optimize_image_for_processing(img_array):
     
     return img_array
 
-def fast_edge_detection(img_gray, low_threshold=50, high_threshold=100):
-    """高速化されたエッジ検出（パラメータ調整）"""
-    # より軽いパラメータでエッジ検出を高速化
-    edges = cv2.Canny(img_gray, low_threshold, high_threshold, apertureSize=3)
-    return edges / 255.0
-
-def parallel_pattern_generation(hidden_array, pattern_type, stripe_method, overlay_ratio=0.4):
-    """並列処理でパターン生成を高速化"""
-    config = get_cached_pattern_config(stripe_method)
-    
-    def generate_base_pattern():
-        if config["base_method"] == "high_frequency":
-            return create_high_frequency_moire_stripes(hidden_array, pattern_type, strength=0.015)
-        elif config["base_method"] and "adaptive" in config["base_method"]:
-            return create_adaptive_moire_stripes(hidden_array, pattern_type, config["base_method"])
-        return None
-    
-    def generate_overlay_pattern():
-        return create_overlay_moire_pattern(hidden_array, pattern_type, overlay_opacity=0.6)
-    
-    # 並列実行（base_methodがNoneの場合はオーバーレイのみ）
-    if config["base_method"] is None:
-        return generate_overlay_pattern()
-    
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        # 2つのパターンを並列生成
-        base_future = executor.submit(generate_base_pattern)
-        overlay_future = executor.submit(generate_overlay_pattern)
+def safe_pattern_generation(hidden_array, pattern_type, stripe_method, overlay_ratio=0.4):
+    """安全なパターン生成（エラーハンドリング強化）"""
+    try:
+        config = get_cached_pattern_config(stripe_method)
         
-        base_pattern = base_future.result()
-        overlay_pattern = overlay_future.result()
+        print(f"Using pattern config: {config}")
+        
+        # オーバーレイパターンは常に生成
+        overlay_pattern = create_overlay_moire_pattern(hidden_array, pattern_type, overlay_opacity=0.6)
+        
+        # ベースパターンが不要な場合はオーバーレイのみ返却
+        if config["base_method"] is None:
+            print("Using overlay-only pattern")
+            return overlay_pattern
+        
+        # ベースパターンを生成
+        base_pattern = None
+        if config["base_method"] == "high_frequency":
+            print("Generating high frequency pattern")
+            base_pattern = create_high_frequency_moire_stripes(hidden_array, pattern_type, strength=0.015)
+        elif config["base_method"] and "adaptive" in config["base_method"]:
+            print(f"Generating adaptive pattern: {config['base_method']}")
+            base_pattern = create_adaptive_moire_stripes(hidden_array, pattern_type, config["base_method"])
+        else:
+            print("Using default adaptive pattern")
+            base_pattern = create_adaptive_moire_stripes(hidden_array, pattern_type, "adaptive")
+        
+        if base_pattern is None:
+            print("Base pattern is None, using overlay only")
+            return overlay_pattern
+        
+        # パターンの形状確認
+        print(f"Base pattern shape: {base_pattern.shape}")
+        print(f"Overlay pattern shape: {overlay_pattern.shape}")
+        
+        # 形状が一致することを確認
+        if base_pattern.shape != overlay_pattern.shape:
+            print("Shape mismatch detected, using overlay only")
+            del base_pattern
+            return overlay_pattern
         
         # 加重合成（OpenCVの高速実装を使用）
         result = cv2.addWeighted(
-            base_pattern, config["base_weight"], 
-            overlay_pattern, config["overlay_weight"], 
+            optimize_image_for_processing(base_pattern), config["base_weight"], 
+            optimize_image_for_processing(overlay_pattern), config["overlay_weight"], 
             0
         )
         
         # 中間データを即座に削除
         del base_pattern, overlay_pattern
+        clear_memory()
+        
         return result
-
-def fast_resize_with_optimization(img, target_size, method='contain'):
-    """最適化された高速リサイズ"""
-    target_width, target_height = target_size
-    
-    if isinstance(img, np.ndarray):
-        img_pil = Image.fromarray(img)
-    else:
-        img_pil = img
-    
-    # 既に目標サイズの場合はスキップ
-    if img_pil.size == (target_width, target_height):
-        return img_pil
-    
-    # LANCZOSの代わりにBILINEARを使用（速度優先）
-    if method == 'stretch':
-        return img_pil.resize((target_width, target_height), Image.Resampling.BILINEAR)
-    
-    # contain/cover処理も高速化版を使用
-    orig_width, orig_height = img_pil.size
-    orig_aspect = orig_width / orig_height
-    target_aspect = target_width / target_height
-    
-    if method == 'contain':
-        if orig_aspect > target_aspect:
-            new_width = target_width
-            new_height = int(target_width / orig_aspect)
-        else:
-            new_height = target_height
-            new_width = int(target_height * orig_aspect)
         
-        resized = img_pil.resize((new_width, new_height), Image.Resampling.BILINEAR)
-        
-        # 黒背景キャンバス（高速生成）
-        canvas = Image.new('RGB', (target_width, target_height), (0, 0, 0))
-        x_offset = (target_width - new_width) // 2
-        y_offset = (target_height - new_height) // 2
-        canvas.paste(resized, (x_offset, y_offset))
-        
-        return canvas
-    
-    elif method == 'cover':
-        if orig_aspect > target_aspect:
-            new_height = target_height
-            new_width = int(target_height * orig_aspect)
-        else:
-            new_width = target_width
-            new_height = int(target_width / orig_aspect)
-        
-        resized = img_pil.resize((new_width, new_height), Image.Resampling.BILINEAR)
-        
-        x_offset = (new_width - target_width) // 2
-        y_offset = (new_height - target_height) // 2
-        cropped = resized.crop((x_offset, y_offset, x_offset + target_width, y_offset + target_height))
-        
-        return cropped
+    except Exception as e:
+        print(f"Pattern generation error: {e}")
+        # エラー時はシンプルなオーバーレイパターンを返却
+        try:
+            overlay_pattern = create_overlay_moire_pattern(hidden_array, pattern_type, overlay_opacity=0.6)
+            return overlay_pattern
+        except Exception as fallback_error:
+            print(f"Fallback pattern generation error: {fallback_error}")
+            # 最終的なフォールバック：単純な縞模様
+            height, width = hidden_array.shape[:2]
+            fallback_result = np.zeros((height, width, 3), dtype=np.uint8)
+            if pattern_type == "horizontal":
+                for y in range(height):
+                    stripe_value = (y % 2) * 255
+                    fallback_result[y, :] = [stripe_value, stripe_value, stripe_value]
+            else:
+                for x in range(width):
+                    stripe_value = (x % 2) * 255
+                    fallback_result[:, x] = [stripe_value, stripe_value, stripe_value]
+            return fallback_result
 
 def process_hidden_image(
     base_img_path: str, 
@@ -150,15 +131,19 @@ def process_hidden_image(
     border_width: int = 3, 
     overlay_ratio: float = 0.4
 ):
-    """超高速版：モアレ効果を利用した隠し画像を生成"""
+    """エラー修正版：モアレ効果を利用した隠し画像を生成"""
     start_time = time.time()
     settings = get_settings()
     
     print(f"🚀 Starting high-speed processing...")
+    print(f"Parameters: {pattern_type}, {stripe_method}, {resize_method}")
     
     try:
         # === フェーズ1: 画像読み込み（最適化） ===
         phase_start = time.time()
+        
+        if not os.path.exists(base_img_path):
+            raise FileNotFoundError(f"Base image not found: {base_img_path}")
         
         with Image.open(base_img_path) as base_img:
             # 巨大な画像は事前に軽くリサイズ（処理速度向上）
@@ -174,17 +159,17 @@ def process_hidden_image(
         phase_start = time.time()
         
         x, y, width, height = region
+        print(f"Region: x={x}, y={y}, w={width}, h={height}")
+        
         hidden_img = extract_region_from_image(base_img_array, region)
         
         if hidden_img is None:
             raise ValueError("領域の抽出に失敗しました")
         
-        # 高速リサイズを使用
-        base_fixed = fast_resize_with_optimization(
-            base_img_array, 
-            (settings.TARGET_WIDTH, settings.TARGET_HEIGHT), 
-            method=resize_method
-        )
+        print(f"Hidden image shape: {hidden_img.shape}")
+        
+        # 固定サイズにリサイズ
+        base_fixed = resize_to_fixed_size(base_img_array, method=resize_method)
         base_fixed_array = optimize_image_for_processing(np.array(base_fixed))
         
         # 元のデータを即座に削除
@@ -196,16 +181,18 @@ def process_hidden_image(
         # === フェーズ3: 座標変換（高速化） ===
         phase_start = time.time()
         
-        # スケール計算を簡略化
+        # リサイズの比率を計算
+        scale_x, scale_y, scale, offset_x, offset_y = calculate_resize_factors(
+            Image.fromarray(base_fixed_array), resize_method
+        )
+        
+        # 領域を固定サイズ座標系に変換
         if resize_method != 'stretch':
-            scale = min(settings.TARGET_WIDTH / (x + width), settings.TARGET_HEIGHT / (y + height))
-            x_fixed = int(x * scale)
-            y_fixed = int(y * scale)
+            x_fixed = int(x * scale + offset_x)
+            y_fixed = int(y * scale + offset_y)
             width_fixed = int(width * scale)
             height_fixed = int(height * scale)
         else:
-            scale_x = settings.TARGET_WIDTH / base_img_array.shape[1] if 'base_img_array' in locals() else 1
-            scale_y = settings.TARGET_HEIGHT / base_img_array.shape[0] if 'base_img_array' in locals() else 1
             x_fixed = int(x * scale_x)
             y_fixed = int(y * scale_y)
             width_fixed = int(width * scale_x)
@@ -217,6 +204,7 @@ def process_hidden_image(
         width_fixed = min(width_fixed, settings.TARGET_WIDTH - x_fixed)
         height_fixed = min(height_fixed, settings.TARGET_HEIGHT - y_fixed)
         
+        print(f"Fixed region: x={x_fixed}, y={y_fixed}, w={width_fixed}, h={height_fixed}")
         print(f"📐 Coordinate mapping: {time.time() - phase_start:.2f}s")
         
         # === フェーズ4: 隠し画像準備（高速化） ===
@@ -226,16 +214,20 @@ def process_hidden_image(
         hidden_resized = hidden_pil.resize((width_fixed, height_fixed), Image.Resampling.BILINEAR)
         hidden_array = optimize_image_for_processing(np.array(hidden_resized))
         
+        print(f"Hidden array final shape: {hidden_array.shape}")
+        
         del hidden_img, hidden_pil, hidden_resized
         clear_memory()
         
         print(f"🖼️ Hidden image prep: {time.time() - phase_start:.2f}s")
         
-        # === フェーズ5: パターン生成（並列処理） ===
+        # === フェーズ5: パターン生成（エラーハンドリング強化） ===
         phase_start = time.time()
         
-        stripe_pattern = parallel_pattern_generation(hidden_array, pattern_type, stripe_method, overlay_ratio)
+        stripe_pattern = safe_pattern_generation(hidden_array, pattern_type, stripe_method, overlay_ratio)
         stripe_pattern = optimize_image_for_processing(stripe_pattern)
+        
+        print(f"Final stripe pattern shape: {stripe_pattern.shape}")
         
         del hidden_array
         clear_memory()
@@ -251,14 +243,7 @@ def process_hidden_image(
         
         # 黒い枠を追加（高速化）
         if add_border:
-            # OpenCVの高速rectangle描画を使用
-            cv2.rectangle(
-                result_fixed, 
-                (x_fixed - border_width, y_fixed - border_width),
-                (x_fixed + width_fixed + border_width, y_fixed + height_fixed + border_width),
-                (0, 0, 0), 
-                border_width
-            )
+            result_fixed = add_black_border(result_fixed, (x_fixed, y_fixed, width_fixed, height_fixed), border_width)
         
         del stripe_pattern, base_fixed_array
         clear_memory()
@@ -275,15 +260,16 @@ def process_hidden_image(
         os.makedirs("static", exist_ok=True)
         result_path = os.path.join("static", result_filename)
         
-        # PNG保存の最適化（compress_level=6で速度と品質のバランス）
-        Image.fromarray(result_fixed.astype('uint8')).save(
+        # PNG保存の最適化
+        result_image = Image.fromarray(result_fixed.astype('uint8'))
+        result_image.save(
             result_path, 
             format="PNG", 
             optimize=False,  # optimizeを無効化して高速化
             compress_level=6  # 適度な圧縮で高速化
         )
         
-        del result_fixed
+        del result_fixed, result_image
         clear_memory()
         
         print(f"💾 File saving: {time.time() - phase_start:.2f}s")
@@ -291,12 +277,18 @@ def process_hidden_image(
         total_time = time.time() - start_time
         print(f"🎉 Total processing time: {total_time:.2f}s")
         
-        return {
-            "result": result_filename,
-            "processing_time": round(total_time, 2)
+        # 結果を辞書で返却（エラー修正）
+        result_dict = {
+            "result": result_filename
         }
+        
+        print(f"Returning result: {result_dict}")
+        
+        return result_dict
         
     except Exception as e:
         print(f"❌ Processing error: {e}")
+        import traceback
+        traceback.print_exc()
         clear_memory()
         raise e
