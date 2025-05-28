@@ -30,6 +30,11 @@
   pointer-events: none;
 }
 
+.app-title-container {
+  position: relative;
+  display: inline-block;
+}
+
 .app-title {
   font-size: clamp(3rem, 8vw, 6rem);
   margin-bottom: var(--space-md);
@@ -40,13 +45,11 @@
   animation: fadeIn 1s ease-out;
 }
 
-.app-title::after {
-  content: '';
+.app-title-bar {
   position: absolute;
   bottom: -15px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 80px;
+  left: 0;
+  width: 100%;
   height: 6px;
   background: var(--gradient-primary);
   border-radius: var(--radius-full);
