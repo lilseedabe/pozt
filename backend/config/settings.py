@@ -1,10 +1,10 @@
 """
-特殊視覚効果による隠し画像ジェネレーターの設定
+特殊視覚効果による隠し画像ジェネレーターの設定（高品質維持・プレビュー削減版）
 """
 
-# 画像サイズ設定
-TARGET_WIDTH = 2430   # 固定サイズの幅
-TARGET_HEIGHT = 3240  # 固定サイズの高さ
+# 画像サイズ設定（高品質維持）
+TARGET_WIDTH = 2430   # 元のサイズを維持
+TARGET_HEIGHT = 3240  # 元のサイズを維持
 
 # モード設定
 PATTERN_TYPES = {
@@ -12,7 +12,7 @@ PATTERN_TYPES = {
     "vertical": "縦パターン（垂直）"
 }
 
-# パターンタイプ定義
+# パターンタイプ定義（全て維持）
 STRIPE_METHODS = {
     "overlay": "マスク重ね合わせモード",
     "high_frequency": "高周波パターン + 重ね合わせ融合",
@@ -30,19 +30,19 @@ STRIPE_METHODS = {
     "hybrid": "混合モード（可変比率）"
 }
 
-# 強度マッピング
+# 強度マッピング（全て維持）
 STRENGTH_MAP = {
-    "high_frequency": 0.015,    # 高周波モード
-    "adaptive": 0.02,           # 標準
-    "adaptive_subtle": 0.015,   # 控えめ
-    "adaptive_strong": 0.03,    # 強め
-    "adaptive_minimal": 0.01,   # 最小
-    "perfect_subtle": 0.025,    # 弱めに調整
-    "ultra_subtle": 0.02,       # 弱めに調整
-    "near_perfect": 0.018,      # 弱めに調整
-    "color_preserving": 0.025,  # 色調保存モード
-    "hue_preserving": 0.02,     # 色相保存モード
-    "blended": 0.022           # ブレンドモード
+    "high_frequency": 0.015,
+    "adaptive": 0.02,
+    "adaptive_subtle": 0.015,
+    "adaptive_strong": 0.03,
+    "adaptive_minimal": 0.01,
+    "perfect_subtle": 0.025,
+    "ultra_subtle": 0.02,
+    "near_perfect": 0.018,
+    "color_preserving": 0.025,
+    "hue_preserving": 0.02,
+    "blended": 0.022
 }
 
 # リサイズ方法
@@ -55,3 +55,6 @@ RESIZE_METHODS = {
 # デフォルト値
 DEFAULT_REGION_SIZE = 150
 DEFAULT_BORDER_WIDTH = 3
+
+# メモリ最適化設定（プレビュー削減のみ）
+ENABLE_SINGLE_PREVIEW_MODE = True  # プレビューを1つのみ生成
