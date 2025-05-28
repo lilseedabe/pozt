@@ -32,17 +32,17 @@ STRIPE_METHODS = {
 
 # 強度マッピングの修正版（全て大幅に増加）
 STRENGTH_MAP = {
-    "high_frequency": 0.25,        # 0.015 → 0.25 (16倍)
-    "adaptive": 0.3,               # 0.02 → 0.3 (15倍)
-    "adaptive_subtle": 0.2,        # 0.015 → 0.2 (13倍)
-    "adaptive_strong": 0.4,        # 0.03 → 0.4 (13倍)
-    "adaptive_minimal": 0.15,      # 0.01 → 0.15 (15倍)
-    "perfect_subtle": 0.35,        # 0.025 → 0.35 (14倍)
-    "ultra_subtle": 0.25,          # 0.02 → 0.25 (12倍)
-    "near_perfect": 0.22,          # 0.018 → 0.22 (12倍)
-    "color_preserving": 0.35,      # 0.025 → 0.35 (14倍)
-    "hue_preserving": 0.25,        # 0.02 → 0.25 (12倍)
-    "blended": 0.3                 # 0.022 → 0.3 (13倍)
+    "high_frequency": 0.015,        # 0.015 → 0.25 (16倍)
+    "adaptive": 0.02,               # 0.02 → 0.3 (15倍)
+    "adaptive_subtle": 0.015,        # 0.015 → 0.2 (13倍)
+    "adaptive_strong": 0.03,        # 0.03 → 0.4 (13倍)
+    "adaptive_minimal": 0.01,      # 0.01 → 0.15 (15倍)
+    "perfect_subtle": 0.025,        # 0.025 → 0.35 (14倍)
+    "ultra_subtle": 0.02,          # 0.02 → 0.25 (12倍)
+    "near_perfect": 0.018,          # 0.018 → 0.22 (12倍)
+    "color_preserving": 0.025,      # 0.025 → 0.35 (14倍)
+    "hue_preserving": 0.02,        # 0.02 → 0.25 (12倍)
+    "blended": 0.022                 # 0.022 → 0.3 (13倍)
 }
 
 # リサイズ方法
