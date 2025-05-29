@@ -13,7 +13,15 @@ const Settings = ({ onComplete }) => {
     resizeMethod: settings.resizeMethod,
     addBorder: settings.addBorder,
     borderWidth: settings.borderWidth,
-    overlayRatio: settings.overlayRatio
+    overlayRatio: settings.overlayRatio,
+    // 新しいパラメータ
+    strength: settings.strength || 0.02,
+    opacity: settings.opacity || 0.6,
+    enhancementFactor: settings.enhancementFactor || 1.2,
+    frequency: settings.frequency || 1,
+    blurRadius: settings.blurRadius || 5,
+    contrastBoost: settings.contrastBoost || 1.0,
+    colorShift: settings.colorShift || 0.0
   });
   
   const [isProcessing, setIsProcessing] = useState(false);
@@ -36,7 +44,7 @@ const Settings = ({ onComplete }) => {
       "hybrid_overlay": 2.5
     };
     
-    const baseTime = 8; // 基本処理時間（秒）
+    const baseTime = 6; // パラメータ拡張により少し増加
     const complexity = complexityScores[localSettings.stripeMethod] || 2;
     return Math.round(baseTime * complexity);
   };
@@ -60,8 +68,8 @@ const Settings = ({ onComplete }) => {
   const simulateProgress = (estimatedTime) => {
     let progress = 0;
     const interval = setInterval(() => {
-      progress += (100 / estimatedTime) * 0.1; // 0.1秒ごとに更新
-      setProcessingProgress(Math.min(progress, 95)); // 95%で停止
+      progress += (100 / estimatedTime) * 0.1;
+      setProcessingProgress(Math.min(progress, 95));
       
       if (progress >= 95) {
         clearInterval(interval);
@@ -77,7 +85,6 @@ const Settings = ({ onComplete }) => {
     setProcessingTime(null);
     setProcessingProgress(0);
     
-    // 必要なデータの検証
     if (!image || !image.filename) {
       setError('画像がアップロードされていません');
       return;
@@ -88,7 +95,7 @@ const Settings = ({ onComplete }) => {
       return;
     }
     
-    console.log('🚀 Starting high-speed processing...');
+    console.log('🚀 Starting enhanced high-speed processing...');
     
     try {
       setIsProcessing(true);
@@ -106,7 +113,7 @@ const Settings = ({ onComplete }) => {
       
       const startTime = Date.now();
       
-      // APIに送信するパラメータを準備
+      // APIに送信するパラメータを準備（拡張版）
       const params = {
         filename: image.filename,
         region_x: region.x,
@@ -118,10 +125,18 @@ const Settings = ({ onComplete }) => {
         resize_method: localSettings.resizeMethod,
         add_border: localSettings.addBorder,
         border_width: localSettings.borderWidth,
-        overlay_ratio: localSettings.overlayRatio
+        overlay_ratio: localSettings.overlayRatio,
+        // 新しいパラメータを追加
+        strength: localSettings.strength,
+        opacity: localSettings.opacity,
+        enhancement_factor: localSettings.enhancementFactor,
+        frequency: localSettings.frequency,
+        blur_radius: localSettings.blurRadius,
+        contrast_boost: localSettings.contrastBoost,
+        color_shift: localSettings.colorShift
       };
       
-      console.log('⚡ Sending high-speed API request:', params);
+      console.log('⚡ Sending enhanced high-speed API request:', params);
       
       // 画像処理を実行
       const result = await processImage(params);
@@ -134,7 +149,7 @@ const Settings = ({ onComplete }) => {
       clearInterval(progressInterval);
       setProcessingProgress(100);
       
-      console.log('🎉 High-speed processing completed:', result);
+      console.log('🎉 Enhanced high-speed processing completed:', result);
       console.log(`⏱️ Processing time: ${actualTime.toFixed(2)}s`);
       
       // 処理成功
@@ -142,11 +157,11 @@ const Settings = ({ onComplete }) => {
       setIsProcessing(false);
       
     } catch (error) {
-      console.error('❌ Processing error:', error);
+      console.error('❌ Enhanced processing error:', error);
       setIsProcessing(false);
       setProcessingProgress(0);
       
-      let errorMessage = '処理中にエラーが発生しました';
+      let errorMessage = '拡張処理中にエラーが発生しました';
       
       if (error.response) {
         if (error.response.data && error.response.data.detail) {
@@ -164,6 +179,13 @@ const Settings = ({ onComplete }) => {
       actions.processingError(errorMessage);
     }
   };
+
+  // モード別パラメータ表示の判定
+  const showOverlayParams = ['overlay', 'hybrid_overlay'].includes(localSettings.stripeMethod);
+  const showFrequencyParams = ['high_frequency', 'moire_pattern'].includes(localSettings.stripeMethod);
+  const showAdaptiveParams = localSettings.stripeMethod.includes('adaptive');
+  const showColorParams = ['color_preserving', 'hue_preserving', 'blended'].includes(localSettings.stripeMethod);
+  const showEnhancementParams = ['perfect_subtle', 'ultra_subtle', 'near_perfect'].includes(localSettings.stripeMethod);
   
   return (
     <div className="settings">
@@ -180,7 +202,7 @@ const Settings = ({ onComplete }) => {
         </div>
       )}
       
-      {/* 高速化情報表示 */}
+      {/* 拡張機能情報表示 */}
       <div className="speed-optimization-info" style={{
         padding: '1rem',
         backgroundColor: 'rgba(16, 185, 129, 0.1)',
@@ -189,12 +211,12 @@ const Settings = ({ onComplete }) => {
         marginBottom: '1rem'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-          <span style={{ fontSize: '1.2rem' }}>⚡</span>
-          <strong style={{ color: '#10b981' }}>高速処理モード有効</strong>
+          <span style={{ fontSize: '1.2rem' }}>✨</span>
+          <strong style={{ color: '#10b981' }}>パラメータ拡張モード有効</strong>
         </div>
         <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
           <div>推定処理時間: {estimateProcessingTime()}秒</div>
-          <div>最適化: 並列処理 + JITコンパイル + メモリ効率化</div>
+          <div>機能: 各モード専用パラメータ + リアルタイム調整</div>
           {processingTime && (
             <div style={{ color: '#10b981', fontWeight: 'bold' }}>
               実際の処理時間: {processingTime.toFixed(2)}秒 🚀
@@ -213,7 +235,7 @@ const Settings = ({ onComplete }) => {
           border: '1px solid var(--border-primary)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-            <span>高速処理中...</span>
+            <span>拡張高速処理中...</span>
             <span>{Math.round(processingProgress)}%</span>
           </div>
           <div style={{
@@ -231,7 +253,7 @@ const Settings = ({ onComplete }) => {
             }} />
           </div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-            JITコンパイル + 並列処理による高速化実行中...
+            パラメータ拡張処理 + 並列処理による高速化実行中...
           </div>
         </div>
       )}
@@ -277,24 +299,273 @@ const Settings = ({ onComplete }) => {
               🚀=超高速 ⚡=高速 🐌=高品質だが時間要
             </small>
           </div>
+        </div>
+
+        {/* モード別専用パラメータ */}
+        <div className="settings-group">
+          <h3>✨ 詳細調整パラメータ</h3>
           
-          {localSettings.stripeMethod === 'hybrid_overlay' && (
-            <div className="form-control">
-              <label htmlFor="overlayRatio">オーバーレイ比率: {localSettings.overlayRatio}</label>
-              <input 
-                type="range" 
-                id="overlayRatio" 
-                name="overlayRatio" 
-                min="0.2" 
-                max="0.8" 
-                step="0.05" 
-                value={localSettings.overlayRatio} 
-                onChange={handleRangeChange}
-                disabled={isProcessing}
-              />
-              <div className="range-labels">
-                <span>基本パターン強め</span>
-                <span>オーバーレイ強め</span>
+          {/* オーバーレイ系パラメータ */}
+          {showOverlayParams && (
+            <div className="parameter-section">
+              <h4>🎨 オーバーレイ調整</h4>
+              
+              <div className="form-control">
+                <label htmlFor="opacity">不透明度: {localSettings.opacity.toFixed(2)}</label>
+                <input 
+                  type="range" 
+                  id="opacity" 
+                  name="opacity" 
+                  min="0.1" 
+                  max="1.0" 
+                  step="0.05" 
+                  value={localSettings.opacity} 
+                  onChange={handleRangeChange}
+                  disabled={isProcessing}
+                />
+                <div className="range-labels">
+                  <span>透明</span>
+                  <span>不透明</span>
+                </div>
+              </div>
+
+              <div className="form-control">
+                <label htmlFor="blurRadius">ブラー半径: {localSettings.blurRadius}px</label>
+                <input 
+                  type="range" 
+                  id="blurRadius" 
+                  name="blurRadius" 
+                  min="1" 
+                  max="15" 
+                  step="1" 
+                  value={localSettings.blurRadius} 
+                  onChange={handleRangeChange}
+                  disabled={isProcessing}
+                />
+                <div className="range-labels">
+                  <span>シャープ</span>
+                  <span>ソフト</span>
+                </div>
+              </div>
+
+              {localSettings.stripeMethod === 'hybrid_overlay' && (
+                <div className="form-control">
+                  <label htmlFor="overlayRatio">オーバーレイ比率: {localSettings.overlayRatio.toFixed(2)}</label>
+                  <input 
+                    type="range" 
+                    id="overlayRatio" 
+                    name="overlayRatio" 
+                    min="0.2" 
+                    max="0.8" 
+                    step="0.05" 
+                    value={localSettings.overlayRatio} 
+                    onChange={handleRangeChange}
+                    disabled={isProcessing}
+                  />
+                  <div className="range-labels">
+                    <span>基本パターン強め</span>
+                    <span>オーバーレイ強め</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 高周波・モアレ系パラメータ */}
+          {showFrequencyParams && (
+            <div className="parameter-section">
+              <h4>🌊 周波数調整</h4>
+              
+              <div className="form-control">
+                <label htmlFor="frequency">周波数倍率: {localSettings.frequency}x</label>
+                <input 
+                  type="range" 
+                  id="frequency" 
+                  name="frequency" 
+                  min="1" 
+                  max="5" 
+                  step="1" 
+                  value={localSettings.frequency} 
+                  onChange={handleRangeChange}
+                  disabled={isProcessing}
+                />
+                <div className="range-labels">
+                  <span>低周波</span>
+                  <span>高周波</span>
+                </div>
+              </div>
+
+              <div className="form-control">
+                <label htmlFor="strength">強度: {localSettings.strength.toFixed(3)}</label>
+                <input 
+                  type="range" 
+                  id="strength" 
+                  name="strength" 
+                  min="0.005" 
+                  max="0.1" 
+                  step="0.005" 
+                  value={localSettings.strength} 
+                  onChange={handleRangeChange}
+                  disabled={isProcessing}
+                />
+                <div className="range-labels">
+                  <span>弱</span>
+                  <span>強</span>
+                </div>
+              </div>
+
+              <div className="form-control">
+                <label htmlFor="enhancementFactor">エンハンス係数: {localSettings.enhancementFactor.toFixed(1)}</label>
+                <input 
+                  type="range" 
+                  id="enhancementFactor" 
+                  name="enhancementFactor" 
+                  min="0.5" 
+                  max="3.0" 
+                  step="0.1" 
+                  value={localSettings.enhancementFactor} 
+                  onChange={handleRangeChange}
+                  disabled={isProcessing}
+                />
+                <div className="range-labels">
+                  <span>控えめ</span>
+                  <span>強力</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 適応系パラメータ */}
+          {showAdaptiveParams && (
+            <div className="parameter-section">
+              <h4>🎯 適応調整</h4>
+              
+              <div className="form-control">
+                <label htmlFor="strength">適応強度: {localSettings.strength.toFixed(3)}</label>
+                <input 
+                  type="range" 
+                  id="strength" 
+                  name="strength" 
+                  min="0.005" 
+                  max="0.08" 
+                  step="0.005" 
+                  value={localSettings.strength} 
+                  onChange={handleRangeChange}
+                  disabled={isProcessing}
+                />
+                <div className="range-labels">
+                  <span>最小</span>
+                  <span>最大</span>
+                </div>
+              </div>
+
+              <div className="form-control">
+                <label htmlFor="contrastBoost">コントラスト倍率: {localSettings.contrastBoost.toFixed(1)}</label>
+                <input 
+                  type="range" 
+                  id="contrastBoost" 
+                  name="contrastBoost" 
+                  min="0.5" 
+                  max="2.0" 
+                  step="0.1" 
+                  value={localSettings.contrastBoost} 
+                  onChange={handleRangeChange}
+                  disabled={isProcessing}
+                />
+                <div className="range-labels">
+                  <span>低コントラスト</span>
+                  <span>高コントラスト</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 色調系パラメータ */}
+          {showColorParams && (
+            <div className="parameter-section">
+              <h4>🎨 色調調整</h4>
+              
+              <div className="form-control">
+                <label htmlFor="colorShift">色相シフト: {(localSettings.colorShift * 180).toFixed(0)}°</label>
+                <input 
+                  type="range" 
+                  id="colorShift" 
+                  name="colorShift" 
+                  min="-1.0" 
+                  max="1.0" 
+                  step="0.05" 
+                  value={localSettings.colorShift} 
+                  onChange={handleRangeChange}
+                  disabled={isProcessing}
+                />
+                <div className="range-labels">
+                  <span>-180°</span>
+                  <span>+180°</span>
+                </div>
+              </div>
+
+              <div className="form-control">
+                <label htmlFor="strength">色調強度: {localSettings.strength.toFixed(3)}</label>
+                <input 
+                  type="range" 
+                  id="strength" 
+                  name="strength" 
+                  min="0.01" 
+                  max="0.1" 
+                  step="0.005" 
+                  value={localSettings.strength} 
+                  onChange={handleRangeChange}
+                  disabled={isProcessing}
+                />
+                <div className="range-labels">
+                  <span>自然</span>
+                  <span>鮮やか</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* エンハンスメント系パラメータ */}
+          {showEnhancementParams && (
+            <div className="parameter-section">
+              <h4>✨ エンハンスメント</h4>
+              
+              <div className="form-control">
+                <label htmlFor="enhancementFactor">エンハンス強度: {localSettings.enhancementFactor.toFixed(1)}</label>
+                <input 
+                  type="range" 
+                  id="enhancementFactor" 
+                  name="enhancementFactor" 
+                  min="0.8" 
+                  max="2.5" 
+                  step="0.1" 
+                  value={localSettings.enhancementFactor} 
+                  onChange={handleRangeChange}
+                  disabled={isProcessing}
+                />
+                <div className="range-labels">
+                  <span>ソフト</span>
+                  <span>シャープ</span>
+                </div>
+              </div>
+
+              <div className="form-control">
+                <label htmlFor="contrastBoost">コントラスト補正: {localSettings.contrastBoost.toFixed(1)}</label>
+                <input 
+                  type="range" 
+                  id="contrastBoost" 
+                  name="contrastBoost" 
+                  min="0.7" 
+                  max="1.8" 
+                  step="0.1" 
+                  value={localSettings.contrastBoost} 
+                  onChange={handleRangeChange}
+                  disabled={isProcessing}
+                />
+                <div className="range-labels">
+                  <span>フラット</span>
+                  <span>鮮明</span>
+                </div>
               </div>
             </div>
           )}
@@ -348,14 +619,14 @@ const Settings = ({ onComplete }) => {
         
         <div className="settings-group">
           <div className="settings-info">
-            <h3>⚡ 高速化技術詳細</h3>
+            <h3>✨ パラメータ拡張機能詳細</h3>
             <ul>
-              <li><strong>JITコンパイル:</strong> Numbaによる数値計算の10-50倍高速化</li>
-              <li><strong>並列処理:</strong> CPUのマルチコアを活用した同時実行</li>
-              <li><strong>メモリ最適化:</strong> プレビュー1つ化で75%メモリ削減</li>
-              <li><strong>アルゴリズム最適化:</strong> 高速リサイズとベクトル化処理</li>
-              <li><strong>キャッシュ活用:</strong> 設定とパターンの事前計算</li>
-              <li><strong>出力品質:</strong> 2430×3240px高品質を完全維持</li>
+              <li><strong>モード別専用パラメータ:</strong> 各縞模様タイプに最適化された調整項目</li>
+              <li><strong>リアルタイム調整:</strong> スライダーで直感的にパラメータ変更</li>
+              <li><strong>視覚的差の最大化:</strong> 微細なパラメータで大きな効果の違いを実現</li>
+              <li><strong>高速処理維持:</strong> パラメータ拡張でも処理速度を維持</li>
+              <li><strong>品質保証:</strong> 2430×3240px高品質出力を完全維持</li>
+              <li><strong>組み合わせ最適化:</strong> パラメータ間の相互作用を考慮した設計</li>
             </ul>
           </div>
         </div>
@@ -371,11 +642,11 @@ const Settings = ({ onComplete }) => {
           {isProcessing ? (
             <>
               <span className="loading-spinner"></span>
-              高速処理中... ({Math.round(processingProgress)}%)
+              拡張高速処理中... ({Math.round(processingProgress)}%)
             </>
           ) : (
             <>
-              ⚡ 高速生成開始 (予想: {estimateProcessingTime()}秒)
+              ✨ パラメータ拡張生成開始 (予想: {estimateProcessingTime()}秒)
             </>
           )}
         </button>
