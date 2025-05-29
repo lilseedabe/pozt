@@ -158,7 +158,8 @@ async def process_image(
             resize_method,
             add_border_bool,
             border_width,
-            overlay_ratio
+            overlay_ratio,
+            processing_params  # 新しいパラメータを渡す
         )
         
         print(f"✅ Enhanced processing completed. Result: {result_files}")
