@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer } from 'react';
 
-// 初期状態（最適化版 - 隠し画像効果最大化）
+// 初期状態（パラメータ拡張版・最適化済み）
 const initialState = {
   image: null,
   imageUrl: null,
@@ -12,14 +12,15 @@ const initialState = {
     addBorder: true,
     borderWidth: 3,
     overlayRatio: 0.4,
-    // 🎯 隠し画像効果最適化パラメータ（デフォルト値を0ベースに変更）
+    // 最適化されたデフォルト値
     strength: 0.02,
-    opacity: 0.0,        // 完全透明から開始（隠し画像最大効果）
+    opacity: 0.0,           // 0.6 → 0.0 に変更（最適化）
     enhancementFactor: 1.2,
     frequency: 1,
-    blurRadius: 0,       // ブラーなしから開始（最もシャープな効果）
+    blurRadius: 0,          // 5 → 0 に変更（最適化）
     contrastBoost: 1.0,
-    colorShift: 0.0
+    colorShift: 0.0,
+    sharpnessBoost: 0.0     // 新しいパラメータを追加
   },
   processingStatus: 'idle', // idle, processing, success, error
   result: null,
@@ -37,7 +38,7 @@ const actionTypes = {
   RESET: 'RESET'
 };
 
-// リデューサー（最適化対応）
+// リデューサー（パラメータ拡張対応）
 function appReducer(state, action) {
   switch (action.type) {
     case actionTypes.SET_IMAGE:
@@ -89,7 +90,7 @@ function appReducer(state, action) {
 // コンテキストの作成
 const AppContext = createContext();
 
-// プロバイダーコンポーネント（最適化対応）
+// プロバイダーコンポーネント（パラメータ拡張対応）
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
@@ -104,27 +105,27 @@ export function AppProvider({ children }) {
       payload: region 
     }),
     updateSettings: (settings) => {
-      console.log('🎯 Updating settings with optimized parameters:', settings);
+      console.log('🔧 Updating settings with enhanced parameters:', settings);
       dispatch({ 
         type: actionTypes.UPDATE_SETTINGS, 
         payload: settings 
       });
     },
     startProcessing: () => {
-      console.log('🚀 Starting optimized processing...');
+      console.log('🚀 Starting enhanced processing...');
       dispatch({ 
         type: actionTypes.START_PROCESSING 
       });
     },
     processingSuccess: (result) => {
-      console.log('✅ Optimized processing succeeded:', result);
+      console.log('✅ Enhanced processing succeeded:', result);
       dispatch({ 
         type: actionTypes.PROCESSING_SUCCESS, 
         payload: result 
       });
     },
     processingError: (error) => {
-      console.error('❌ Optimized processing failed:', error);
+      console.error('❌ Enhanced processing failed:', error);
       dispatch({ 
         type: actionTypes.PROCESSING_ERROR, 
         payload: error 
@@ -140,13 +141,12 @@ export function AppProvider({ children }) {
 
   // デバッグ用: 状態変更をログ出力
   React.useEffect(() => {
-    console.log('📊 Optimized App State Updated:', {
+    console.log('📊 Enhanced App State Updated:', {
       hasImage: !!state.image,
       hasRegion: !!state.region,
       processingStatus: state.processingStatus,
       settings: state.settings,
-      hasResult: !!state.result,
-      optimizationMode: state.settings.opacity === 0 && state.settings.blurRadius === 0 ? '🎯 Maximum Effect' : '🔧 Custom'
+      hasResult: !!state.result
     });
   }, [state]);
 
