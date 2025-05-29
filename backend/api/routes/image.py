@@ -39,7 +39,7 @@ async def upload_image(
             "filename": filename,
             "width": image.width,
             "height": image.height,
-            "url": f"/uploads/{filename}"  # /uploads/ に変更
+            "url": f"/uploads/{filename}"
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -55,23 +55,38 @@ async def process_image(
     pattern_type: str = Form("horizontal"),
     stripe_method: str = Form("overlay"),
     resize_method: str = Form("contain"),
-    add_border: str = Form("true"),  # 文字列として受信
+    add_border: str = Form("true"),
     border_width: int = Form(3),
     overlay_ratio: float = Form(0.4),
+    # 新しいパラメータを追加
+    strength: float = Form(0.02),
+    opacity: float = Form(0.6),
+    enhancement_factor: float = Form(1.2),
+    frequency: int = Form(1),
+    blur_radius: int = Form(5),
+    contrast_boost: float = Form(1.0),
+    color_shift: float = Form(0.0),
     settings: Settings = Depends(get_api_settings)
 ):
-    """画像を処理してモアレ効果を適用（エラー修正版）"""
+    """画像を処理してモアレ効果を適用（パラメータ拡張版）"""
     try:
         # デバッグ用ログ
-        print(f"🚀 Process request received:")
+        print(f"🚀 Enhanced process request received:")
         print(f"  filename: {filename}")
         print(f"  region: ({region_x}, {region_y}, {region_width}, {region_height})")
         print(f"  pattern_type: {pattern_type}")
         print(f"  stripe_method: {stripe_method}")
         print(f"  resize_method: {resize_method}")
-        print(f"  add_border: {add_border} (type: {type(add_border)})")
+        print(f"  add_border: {add_border}")
         print(f"  border_width: {border_width}")
         print(f"  overlay_ratio: {overlay_ratio}")
+        print(f"  strength: {strength}")
+        print(f"  opacity: {opacity}")
+        print(f"  enhancement_factor: {enhancement_factor}")
+        print(f"  frequency: {frequency}")
+        print(f"  blur_radius: {blur_radius}")
+        print(f"  contrast_boost: {contrast_boost}")
+        print(f"  color_shift: {color_shift}")
         
         # ファイルパスの取得と確認
         file_path = get_file_path(filename)
@@ -120,7 +135,19 @@ async def process_image(
             resize_method = "contain"
             print(f"  Invalid resize_method, using default: {resize_method}")
         
-        print(f"✅ Starting image processing...")
+        print(f"✅ Starting enhanced image processing...")
+        
+        # パラメータ辞書を作成
+        processing_params = {
+            'strength': strength,
+            'opacity': opacity,
+            'enhancement_factor': enhancement_factor,
+            'frequency': frequency,
+            'blur_radius': blur_radius,
+            'contrast_boost': contrast_boost,
+            'color_shift': color_shift,
+            'overlay_ratio': overlay_ratio
+        }
         
         # 画像処理の実行
         result_files = process_hidden_image(
@@ -131,10 +158,11 @@ async def process_image(
             resize_method,
             add_border_bool,
             border_width,
-            overlay_ratio
+            overlay_ratio,
+            processing_params  # 新しいパラメータを渡す
         )
         
-        print(f"✅ Processing completed. Result: {result_files}")
+        print(f"✅ Enhanced processing completed. Result: {result_files}")
         
         # 結果ファイルの存在確認
         if not result_files or "result" not in result_files:
@@ -158,22 +186,23 @@ async def process_image(
             "result": f"/uploads/{result_filename}"
         }
         
-        print(f"✅ Processing completed successfully. URLs: {result_urls}")
+        print(f"✅ Enhanced processing completed successfully. URLs: {result_urls}")
         
         # レスポンスを構築
         response_data = {
             "success": True,
             "urls": result_urls,
-            "message": "処理が完了しました",
+            "message": "拡張パラメータによる処理が完了しました",
             "processing_info": {
                 "filename": result_filename,
                 "file_size": result_file_size,
                 "pattern_type": pattern_type,
-                "stripe_method": stripe_method
+                "stripe_method": stripe_method,
+                "parameters_used": processing_params
             }
         }
         
-        print(f"📤 Sending response: {response_data}")
+        print(f"📤 Sending enhanced response: {response_data}")
         
         return response_data
         
@@ -182,7 +211,7 @@ async def process_image(
         raise
         
     except Exception as e:
-        print(f"❌ Unexpected processing error: {str(e)}")
+        print(f"❌ Unexpected enhanced processing error: {str(e)}")
         print(f"❌ Error type: {type(e)}")
         import traceback
         traceback.print_exc()
@@ -191,12 +220,12 @@ async def process_image(
         error_detail = {
             "error": str(e),
             "error_type": type(e).__name__,
-            "processing_stage": "unknown"
+            "processing_stage": "enhanced_processing"
         }
         
         raise HTTPException(
             status_code=500, 
-            detail=f"Processing failed: {str(e)}"
+            detail=f"Enhanced processing failed: {str(e)}"
         )
 
 @router.get("/download/{filename}")
