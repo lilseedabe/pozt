@@ -58,20 +58,21 @@ async def process_image(
     add_border: str = Form("true"),
     border_width: int = Form(3),
     overlay_ratio: float = Form(0.4),
-    # 新しいパラメータを追加
+    # 最適化されたパラメータを追加
     strength: float = Form(0.02),
-    opacity: float = Form(0.6),
+    opacity: float = Form(0.0),                   # デフォルト0.0に変更
     enhancement_factor: float = Form(1.2),
     frequency: int = Form(1),
-    blur_radius: int = Form(5),
+    blur_radius: int = Form(0),                   # デフォルト0に変更
     contrast_boost: float = Form(1.0),
     color_shift: float = Form(0.0),
+    sharpness_boost: float = Form(0.0),           # 新しいパラメータを追加
     settings: Settings = Depends(get_api_settings)
 ):
-    """画像を処理してモアレ効果を適用（パラメータ拡張版）"""
+    """画像を処理してモアレ効果を適用（最適化パラメータ拡張版）"""
     try:
         # デバッグ用ログ
-        print(f"🚀 Enhanced process request received:")
+        print(f"🚀 Optimized process request received:")
         print(f"  filename: {filename}")
         print(f"  region: ({region_x}, {region_y}, {region_width}, {region_height})")
         print(f"  pattern_type: {pattern_type}")
@@ -81,12 +82,13 @@ async def process_image(
         print(f"  border_width: {border_width}")
         print(f"  overlay_ratio: {overlay_ratio}")
         print(f"  strength: {strength}")
-        print(f"  opacity: {opacity}")
+        print(f"  opacity: {opacity} (optimized to 0.0)")
         print(f"  enhancement_factor: {enhancement_factor}")
         print(f"  frequency: {frequency}")
-        print(f"  blur_radius: {blur_radius}")
+        print(f"  blur_radius: {blur_radius} (optimized to 0)")
         print(f"  contrast_boost: {contrast_boost}")
         print(f"  color_shift: {color_shift}")
+        print(f"  sharpness_boost: {sharpness_boost} (new parameter)")
         
         # ファイルパスの取得と確認
         file_path = get_file_path(filename)
@@ -135,9 +137,22 @@ async def process_image(
             resize_method = "contain"
             print(f"  Invalid resize_method, using default: {resize_method}")
         
-        print(f"✅ Starting enhanced image processing...")
+        # 最適化パラメータの範囲チェック
+        if opacity < 0.0 or opacity > 1.0:
+            opacity = max(0.0, min(1.0, opacity))
+            print(f"  Opacity adjusted to valid range: {opacity}")
         
-        # パラメータ辞書を作成
+        if blur_radius < 0 or blur_radius > 50:
+            blur_radius = max(0, min(50, blur_radius))
+            print(f"  Blur radius adjusted to valid range: {blur_radius}")
+        
+        if sharpness_boost < -2.0 or sharpness_boost > 2.0:
+            sharpness_boost = max(-2.0, min(2.0, sharpness_boost))
+            print(f"  Sharpness boost adjusted to valid range: {sharpness_boost}")
+        
+        print(f"✅ Starting optimized image processing...")
+        
+        # 最適化パラメータ辞書を作成
         processing_params = {
             'strength': strength,
             'opacity': opacity,
@@ -146,8 +161,11 @@ async def process_image(
             'blur_radius': blur_radius,
             'contrast_boost': contrast_boost,
             'color_shift': color_shift,
-            'overlay_ratio': overlay_ratio
+            'overlay_ratio': overlay_ratio,
+            'sharpness_boost': sharpness_boost  # 新しいパラメータを追加
         }
+        
+        print(f"📊 Optimized processing parameters: {processing_params}")
         
         # 画像処理の実行
         result_files = process_hidden_image(
@@ -159,10 +177,10 @@ async def process_image(
             add_border_bool,
             border_width,
             overlay_ratio,
-            processing_params  # 新しいパラメータを渡す
+            processing_params  # 最適化パラメータを渡す
         )
         
-        print(f"✅ Enhanced processing completed. Result: {result_files}")
+        print(f"✅ Optimized processing completed. Result: {result_files}")
         
         # 結果ファイルの存在確認
         if not result_files or "result" not in result_files:
@@ -186,23 +204,28 @@ async def process_image(
             "result": f"/uploads/{result_filename}"
         }
         
-        print(f"✅ Enhanced processing completed successfully. URLs: {result_urls}")
+        print(f"✅ Optimized processing completed successfully. URLs: {result_urls}")
         
         # レスポンスを構築
         response_data = {
             "success": True,
             "urls": result_urls,
-            "message": "拡張パラメータによる処理が完了しました",
+            "message": "最適化パラメータによる処理が完了しました",
             "processing_info": {
                 "filename": result_filename,
                 "file_size": result_file_size,
                 "pattern_type": pattern_type,
                 "stripe_method": stripe_method,
-                "parameters_used": processing_params
+                "parameters_used": processing_params,
+                "optimization_applied": {
+                    "opacity_optimized": opacity == 0.0,
+                    "blur_optimized": blur_radius == 0,
+                    "sharpness_boost_applied": sharpness_boost != 0.0
+                }
             }
         }
         
-        print(f"📤 Sending enhanced response: {response_data}")
+        print(f"📤 Sending optimized response: {response_data}")
         
         return response_data
         
@@ -211,7 +234,7 @@ async def process_image(
         raise
         
     except Exception as e:
-        print(f"❌ Unexpected enhanced processing error: {str(e)}")
+        print(f"❌ Unexpected optimized processing error: {str(e)}")
         print(f"❌ Error type: {type(e)}")
         import traceback
         traceback.print_exc()
@@ -220,12 +243,12 @@ async def process_image(
         error_detail = {
             "error": str(e),
             "error_type": type(e).__name__,
-            "processing_stage": "enhanced_processing"
+            "processing_stage": "optimized_processing"
         }
         
         raise HTTPException(
             status_code=500, 
-            detail=f"Enhanced processing failed: {str(e)}"
+            detail=f"Optimized processing failed: {str(e)}"
         )
 
 @router.get("/download/{filename}")
