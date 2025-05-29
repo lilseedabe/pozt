@@ -93,7 +93,7 @@ const RegionSelector = () => {
               <input 
                 type="range" 
                 min="50" 
-                max="400" 
+                max="800" 
                 step="10"
                 value={region.width} 
                 onChange={(e) => {
@@ -111,7 +111,7 @@ const RegionSelector = () => {
               <input 
                 type="range" 
                 min="50" 
-                max="400" 
+                max="800" 
                 step="10"
                 value={region.height} 
                 onChange={(e) => {
