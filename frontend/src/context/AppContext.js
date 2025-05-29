@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer } from 'react';
 
-// 初期状態
+// 初期状態（パラメータ拡張版）
 const initialState = {
   image: null,
   imageUrl: null,
@@ -11,7 +11,15 @@ const initialState = {
     resizeMethod: 'contain',
     addBorder: true,
     borderWidth: 3,
-    overlayRatio: 0.4
+    overlayRatio: 0.4,
+    // 新しいパラメータを追加
+    strength: 0.02,
+    opacity: 0.6,
+    enhancementFactor: 1.2,
+    frequency: 1,
+    blurRadius: 5,
+    contrastBoost: 1.0,
+    colorShift: 0.0
   },
   processingStatus: 'idle', // idle, processing, success, error
   result: null,
@@ -29,7 +37,7 @@ const actionTypes = {
   RESET: 'RESET'
 };
 
-// リデューサー
+// リデューサー（パラメータ拡張対応）
 function appReducer(state, action) {
   switch (action.type) {
     case actionTypes.SET_IMAGE:
@@ -81,7 +89,7 @@ function appReducer(state, action) {
 // コンテキストの作成
 const AppContext = createContext();
 
-// プロバイダーコンポーネント
+// プロバイダーコンポーネント（パラメータ拡張対応）
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
@@ -95,25 +103,51 @@ export function AppProvider({ children }) {
       type: actionTypes.SET_REGION, 
       payload: region 
     }),
-    updateSettings: (settings) => dispatch({ 
-      type: actionTypes.UPDATE_SETTINGS, 
-      payload: settings 
-    }),
-    startProcessing: () => dispatch({ 
-      type: actionTypes.START_PROCESSING 
-    }),
-    processingSuccess: (result) => dispatch({ 
-      type: actionTypes.PROCESSING_SUCCESS, 
-      payload: result 
-    }),
-    processingError: (error) => dispatch({ 
-      type: actionTypes.PROCESSING_ERROR, 
-      payload: error 
-    }),
-    reset: () => dispatch({ 
-      type: actionTypes.RESET 
-    })
+    updateSettings: (settings) => {
+      console.log('🔧 Updating settings with enhanced parameters:', settings);
+      dispatch({ 
+        type: actionTypes.UPDATE_SETTINGS, 
+        payload: settings 
+      });
+    },
+    startProcessing: () => {
+      console.log('🚀 Starting enhanced processing...');
+      dispatch({ 
+        type: actionTypes.START_PROCESSING 
+      });
+    },
+    processingSuccess: (result) => {
+      console.log('✅ Enhanced processing succeeded:', result);
+      dispatch({ 
+        type: actionTypes.PROCESSING_SUCCESS, 
+        payload: result 
+      });
+    },
+    processingError: (error) => {
+      console.error('❌ Enhanced processing failed:', error);
+      dispatch({ 
+        type: actionTypes.PROCESSING_ERROR, 
+        payload: error 
+      });
+    },
+    reset: () => {
+      console.log('🔄 Resetting app state');
+      dispatch({ 
+        type: actionTypes.RESET 
+      });
+    }
   };
+
+  // デバッグ用: 状態変更をログ出力
+  React.useEffect(() => {
+    console.log('📊 Enhanced App State Updated:', {
+      hasImage: !!state.image,
+      hasRegion: !!state.region,
+      processingStatus: state.processingStatus,
+      settings: state.settings,
+      hasResult: !!state.result
+    });
+  }, [state]);
 
   return (
     <AppContext.Provider value={{ state, dispatch, actions }}>
