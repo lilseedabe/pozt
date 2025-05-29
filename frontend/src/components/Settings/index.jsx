@@ -14,14 +14,15 @@ const Settings = ({ onComplete }) => {
     addBorder: settings.addBorder,
     borderWidth: settings.borderWidth,
     overlayRatio: settings.overlayRatio,
-    // 新しいパラメータ
+    // 最適化されたデフォルト値
     strength: settings.strength || 0.02,
-    opacity: settings.opacity || 0.6,
+    opacity: settings.opacity || 0.0,                         // デフォルト0.0
     enhancementFactor: settings.enhancementFactor || 1.2,
     frequency: settings.frequency || 1,
-    blurRadius: settings.blurRadius || 5,
+    blurRadius: settings.blurRadius || 0,                     // デフォルト0
     contrastBoost: settings.contrastBoost || 1.0,
-    colorShift: settings.colorShift || 0.0
+    colorShift: settings.colorShift || 0.0,
+    sharpnessBoost: settings.sharpnessBoost || 0.0            // 新しいパラメータ
   });
   
   const [isProcessing, setIsProcessing] = useState(false);
@@ -126,14 +127,15 @@ const Settings = ({ onComplete }) => {
         add_border: localSettings.addBorder,
         border_width: localSettings.borderWidth,
         overlay_ratio: localSettings.overlayRatio,
-        // 新しいパラメータを追加
+        // 最適化されたパラメータを追加
         strength: localSettings.strength,
         opacity: localSettings.opacity,
         enhancement_factor: localSettings.enhancementFactor,
         frequency: localSettings.frequency,
         blur_radius: localSettings.blurRadius,
         contrast_boost: localSettings.contrastBoost,
-        color_shift: localSettings.colorShift
+        color_shift: localSettings.colorShift,
+        sharpness_boost: localSettings.sharpnessBoost  // 新しいパラメータを追加
       };
       
       console.log('⚡ Sending enhanced high-speed API request:', params);
@@ -202,7 +204,7 @@ const Settings = ({ onComplete }) => {
         </div>
       )}
       
-      {/* 拡張機能情報表示 */}
+      {/* 最適化機能情報表示 */}
       <div className="speed-optimization-info" style={{
         padding: '1rem',
         backgroundColor: 'rgba(16, 185, 129, 0.1)',
@@ -212,11 +214,11 @@ const Settings = ({ onComplete }) => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
           <span style={{ fontSize: '1.2rem' }}>✨</span>
-          <strong style={{ color: '#10b981' }}>パラメータ拡張モード有効</strong>
+          <strong style={{ color: '#10b981' }}>最適化モード有効（隠し画像最優先）</strong>
         </div>
         <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
           <div>推定処理時間: {estimateProcessingTime()}秒</div>
-          <div>機能: 各モード専用パラメータ + リアルタイム調整</div>
+          <div>機能: 不透明度0、ブラー0で最鮮明な隠し画像 + 微細調整</div>
           {processingTime && (
             <div style={{ color: '#10b981', fontWeight: 'bold' }}>
               実際の処理時間: {processingTime.toFixed(2)}秒 🚀
@@ -235,7 +237,7 @@ const Settings = ({ onComplete }) => {
           border: '1px solid var(--border-primary)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-            <span>拡張高速処理中...</span>
+            <span>最適化高速処理中...</span>
             <span>{Math.round(processingProgress)}%</span>
           </div>
           <div style={{
@@ -253,7 +255,7 @@ const Settings = ({ onComplete }) => {
             }} />
           </div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-            パラメータ拡張処理 + 並列処理による高速化実行中...
+            最適化パラメータ処理 + 並列処理による高速化実行中...
           </div>
         </div>
       )}
@@ -284,7 +286,7 @@ const Settings = ({ onComplete }) => {
               onChange={handleChange}
               disabled={isProcessing}
             >
-              <option value="overlay">🚀 重ね合わせモード（最速・推奨）</option>
+              <option value="overlay">🚀 重ね合わせモード（最速・推奨・最適）</option>
               <option value="high_frequency">⚡ 超高周波モード（高速）</option>
               <option value="adaptive">⚡ 標準モアレ効果（高速）</option>
               <option value="adaptive_subtle">⚡ 控えめモアレ効果（高速）</option>
@@ -296,37 +298,40 @@ const Settings = ({ onComplete }) => {
               <option value="hybrid_overlay">⚡ 混合モード（高速）</option>
             </select>
             <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-              🚀=超高速 ⚡=高速 🐌=高品質だが時間要
+              🚀=超高速 ⚡=高速 🐌=高品質だが時間要 | overlayが隠し画像最適
             </small>
           </div>
         </div>
 
         {/* モード別専用パラメータ */}
         <div className="settings-group">
-          <h3>✨ 詳細調整パラメータ</h3>
+          <h3>✨ 最適化詳細調整パラメータ</h3>
           
-          {/* オーバーレイ系パラメータ */}
+          {/* オーバーレイ系パラメータ - 最適化済み */}
           {showOverlayParams && (
             <div className="parameter-section">
-              <h4>🎨 オーバーレイ調整</h4>
+              <h4>🎨 オーバーレイ調整（隠し画像最優先）</h4>
               
               <div className="form-control">
-                <label htmlFor="opacity">不透明度: {localSettings.opacity.toFixed(2)}</label>
+                <label htmlFor="opacity">不透明度: {localSettings.opacity.toFixed(3)}</label>
                 <input 
                   type="range" 
                   id="opacity" 
                   name="opacity" 
-                  min="0.1" 
+                  min="0.0"      // 0.1 → 0.0 に変更
                   max="1.0" 
-                  step="0.05" 
+                  step="0.001"   // 0.05 → 0.001 により超細かく調整可能
                   value={localSettings.opacity} 
                   onChange={handleRangeChange}
                   disabled={isProcessing}
                 />
                 <div className="range-labels">
-                  <span>透明</span>
+                  <span>完全透明 (最適)</span>
                   <span>不透明</span>
                 </div>
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                  💡 0.000が隠し画像最鮮明。微調整で効果を調整
+                </small>
               </div>
 
               <div className="form-control">
@@ -335,36 +340,62 @@ const Settings = ({ onComplete }) => {
                   type="range" 
                   id="blurRadius" 
                   name="blurRadius" 
-                  min="1" 
-                  max="15" 
+                  min="0"        // 1 → 0 に変更
+                  max="25"       // 15 → 25 に拡張
                   step="1" 
                   value={localSettings.blurRadius} 
                   onChange={handleRangeChange}
                   disabled={isProcessing}
                 />
                 <div className="range-labels">
-                  <span>シャープ</span>
+                  <span>シャープ (最適)</span>
                   <span>ソフト</span>
                 </div>
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                  💡 0pxが隠し画像最鮮明。必要に応じて微調整
+                </small>
+              </div>
+              
+              {/* 新たに負の値調整用のパラメータを追加 */}
+              <div className="form-control">
+                <label htmlFor="sharpnessBoost">シャープネス強化: {localSettings.sharpnessBoost.toFixed(3)}</label>
+                <input 
+                  type="range" 
+                  id="sharpnessBoost" 
+                  name="sharpnessBoost" 
+                  min="-1.0"     // マイナス値で逆方向の効果
+                  max="1.0" 
+                  step="0.01" 
+                  value={localSettings.sharpnessBoost} 
+                  onChange={handleRangeChange}
+                  disabled={isProcessing}
+                />
+                <div className="range-labels">
+                  <span>超ソフト化</span>
+                  <span>超シャープ化</span>
+                </div>
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                  💡 マイナス値で逆効果、プラス値で強化効果
+                </small>
               </div>
 
               {localSettings.stripeMethod === 'hybrid_overlay' && (
                 <div className="form-control">
-                  <label htmlFor="overlayRatio">オーバーレイ比率: {localSettings.overlayRatio.toFixed(2)}</label>
+                  <label htmlFor="overlayRatio">オーバーレイ比率: {localSettings.overlayRatio.toFixed(3)}</label>
                   <input 
                     type="range" 
                     id="overlayRatio" 
                     name="overlayRatio" 
-                    min="0.2" 
-                    max="0.8" 
-                    step="0.05" 
+                    min="0.0"      // 0.2 → 0.0 により柔軟に
+                    max="1.0"      // 0.8 → 1.0 に拡張
+                    step="0.001"   // 0.05 → 0.001 により超細かく
                     value={localSettings.overlayRatio} 
                     onChange={handleRangeChange}
                     disabled={isProcessing}
                   />
                   <div className="range-labels">
-                    <span>基本パターン強め</span>
-                    <span>オーバーレイ強め</span>
+                    <span>基本パターンのみ</span>
+                    <span>オーバーレイのみ</span>
                   </div>
                 </div>
               )}
@@ -619,14 +650,14 @@ const Settings = ({ onComplete }) => {
         
         <div className="settings-group">
           <div className="settings-info">
-            <h3>✨ パラメータ拡張機能詳細</h3>
+            <h3>✨ 最適化機能詳細（隠し画像最優先）</h3>
             <ul>
-              <li><strong>モード別専用パラメータ:</strong> 各縞模様タイプに最適化された調整項目</li>
-              <li><strong>リアルタイム調整:</strong> スライダーで直感的にパラメータ変更</li>
-              <li><strong>視覚的差の最大化:</strong> 微細なパラメータで大きな効果の違いを実現</li>
-              <li><strong>高速処理維持:</strong> パラメータ拡張でも処理速度を維持</li>
+              <li><strong>最適デフォルト値:</strong> 不透明度0、ブラー0で隠し画像が最も鮮明に</li>
+              <li><strong>超細かい調整:</strong> 0.001ステップでの微細な効果調整が可能</li>
+              <li><strong>負の値調整:</strong> シャープネス強化で逆方向の効果も実現</li>
+              <li><strong>モード別最適化:</strong> 各縞模様タイプに最適化された調整項目</li>
+              <li><strong>高速処理維持:</strong> 最適化でも処理速度を維持</li>
               <li><strong>品質保証:</strong> 2430×3240px高品質出力を完全維持</li>
-              <li><strong>組み合わせ最適化:</strong> パラメータ間の相互作用を考慮した設計</li>
             </ul>
           </div>
         </div>
@@ -642,11 +673,11 @@ const Settings = ({ onComplete }) => {
           {isProcessing ? (
             <>
               <span className="loading-spinner"></span>
-              拡張高速処理中... ({Math.round(processingProgress)}%)
+              最適化高速処理中... ({Math.round(processingProgress)}%)
             </>
           ) : (
             <>
-              ✨ パラメータ拡張生成開始 (予想: {estimateProcessingTime()}秒)
+              ✨ 最適化生成開始 (予想: {estimateProcessingTime()}秒)
             </>
           )}
         </button>
