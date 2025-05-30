@@ -218,7 +218,7 @@ const Settings = ({ onComplete }) => {
         </div>
         <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
           <div>推定処理時間: {estimateProcessingTime()}秒</div>
-          <div>機能: 不透明度0、ブラー0で最鮮明な隠し画像 + 微細調整</div>
+          <div>機能: 不透明度6~10、ブラー0で最鮮明な隠し画像 + 微細調整</div>
           {processingTime && (
             <div style={{ color: '#10b981', fontWeight: 'bold' }}>
               実際の処理時間: {processingTime.toFixed(2)}秒 🚀
