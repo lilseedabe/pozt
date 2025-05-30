@@ -780,47 +780,17 @@ def create_optimized_overlay_pattern(hidden_array, pattern_type, opacity, blur_r
     # NumPy配列に戻す
     processed_hidden_array = np.array(hidden_pil)
     
-    # 2. 透明度を考慮したパターン生成
+    # 2. 透明度を考慮したパターン生成（修正版）
+    # 最小透明度を確保して、常にオーバーレイ効果を維持
+    adjusted_opacity = max(0.3, min(1.0, opacity))  # 最小値を0.3に設定
+    
     if opacity <= 0.001:
-        # opacity ≈ 0の場合：完全に隠し画像を優先した処理
-        print("  🎯 Ultra-clear mode: opacity≈0, using direct stripe pattern")
-        
-        # 基本的な縞パターンを生成（最小限のオーバーレイ）
-        height, width = processed_hidden_array.shape[:2]
-        
-        if pattern_type == "horizontal":
-            y_coords = np.arange(height, dtype=np.uint8).reshape(-1, 1)
-            stripe_base = (y_coords % 2) * 255
-            stripe_pattern = np.broadcast_to(stripe_base, (height, width))
-        else:  # vertical
-            x_coords = np.arange(width, dtype=np.uint8).reshape(1, -1)
-            stripe_base = (x_coords % 2) * 255
-            stripe_pattern = np.broadcast_to(stripe_base, (height, width))
-        
-        # 隠し画像を直接縞パターンに適用（最鮮明）
-        if len(processed_hidden_array.shape) == 3:
-            hidden_gray = cv2.cvtColor(processed_hidden_array, cv2.COLOR_RGB2GRAY)
-        else:
-            hidden_gray = processed_hidden_array
-        
-        # 隠し画像の輝度に基づいて縞の強度を微調整
-        normalized_hidden = hidden_gray.astype(np.float32) / 255.0
-        intensity_adjustment = (normalized_hidden - 0.5) * 10  # 微調整量
-        
-        adjusted_stripe = stripe_pattern.astype(np.float32) + intensity_adjustment
-        adjusted_stripe = np.clip(adjusted_stripe, 0, 255)
-        
-        # RGB変換
-        result = np.stack([adjusted_stripe, adjusted_stripe, adjusted_stripe], axis=2)
-        
-    else:
-        # 通常のオーバーレイ処理
-        # 透明度を調整して呼び出し
-        adjusted_opacity = max(0.0, min(1.0, opacity))
-        
-        # 基本パターンを生成
-        base_pattern = create_overlay_moire_pattern(processed_hidden_array, pattern_type, adjusted_opacity)
-        result = base_pattern
+        print(f"  🎯 Low opacity detected ({opacity}), adjusting to minimum effective value ({adjusted_opacity})")
+    
+    # 常に通常のオーバーレイ処理を使用
+    print(f"  📋 Using standard overlay processing with opacity={adjusted_opacity}")
+    base_pattern = create_overlay_moire_pattern(processed_hidden_array, pattern_type, adjusted_opacity)
+    result = base_pattern
     
     # 3. コントラスト調整
     if abs(contrast_boost - 1.0) > 0.01:
