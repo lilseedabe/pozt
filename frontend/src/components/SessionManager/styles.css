@@ -1,0 +1,267 @@
+/* セッション期限切れオーバーレイ */
+.session-expired-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  animation: fadeIn 0.5s ease-out;
+}
+
+.session-expired-dialog {
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
+  max-width: 500px;
+  text-align: center;
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border-primary);
+  animation: slideUp 0.5s ease-out;
+}
+
+.session-expired-icon {
+  font-size: 4rem;
+  margin-bottom: var(--space-lg);
+  animation: pulse 2s infinite;
+}
+
+.session-expired-dialog h2 {
+  color: var(--accent-danger);
+  margin-bottom: var(--space-lg);
+  font-size: 1.5rem;
+}
+
+.session-expired-dialog p {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-xl);
+  line-height: 1.6;
+}
+
+.redirect-button {
+  display: inline-block;
+  padding: var(--space-md) var(--space-xl);
+  background: var(--gradient-primary);
+  color: var(--text-primary);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-weight: 600;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  margin-bottom: var(--space-lg);
+}
+
+.redirect-button:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+}
+
+.session-info {
+  margin-top: var(--space-md);
+  padding: var(--space-md);
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-md);
+}
+
+.session-info small {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* セッション警告バナー */
+.session-warning {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  border: 2px solid var(--accent-tertiary);
+  z-index: 1000;
+  animation: slideInRight 0.5s ease-out;
+  max-width: 400px;
+}
+
+.warning-content {
+  display: flex;
+  align-items: center;
+  padding: var(--space-lg);
+  gap: var(--space-md);
+  position: relative;
+}
+
+.warning-icon {
+  font-size: 2rem;
+  animation: bounce 1s infinite;
+}
+
+.warning-text {
+  flex: 1;
+}
+
+.warning-text strong {
+  color: var(--accent-tertiary);
+  display: block;
+  margin-bottom: var(--space-xs);
+  font-size: 1rem;
+}
+
+.warning-text p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.time-remaining {
+  color: var(--accent-danger);
+  font-weight: 700;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 1.1rem;
+}
+
+.extend-button {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--accent-tertiary);
+  color: var(--text-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.extend-button:hover {
+  background: #d97706;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.dismiss-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.dismiss-button:hover {
+  background: var(--accent-danger);
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+/* セッション情報バー */
+.session-info-bar {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--border-primary);
+  box-shadow: var(--shadow-md);
+  z-index: 100;
+  animation: slideUp 0.3s ease-out;
+}
+
+.session-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.status-icon {
+  font-size: 1.2rem;
+}
+
+.status-text {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* アニメーション */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+  .session-warning {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
+  
+  .warning-content {
+    flex-direction: column;
+    text-align: center;
+    padding: var(--space-md);
+  }
+  
+  .extend-button {
+    margin-top: var(--space-md);
+    width: 100%;
+  }
+  
+  .session-expired-dialog {
+    margin: var(--space-lg);
+    padding: var(--space-xl);
+  }
+  
+  .session-info-bar {
+    bottom: 10px;
+    right: 10px;
+    left: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .warning-text strong {
+    font-size: 0.9rem;
+  }
+  
+  .warning-text p {
+    font-size: 0.8rem;
+  }
+  
+  .time-remaining {
+    font-size: 1rem;
+  }
+}
