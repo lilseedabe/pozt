@@ -652,7 +652,7 @@ const Settings = ({ onComplete }) => {
           <div className="settings-info">
             <h3>✨ 最適化機能詳細（隠し画像最優先）</h3>
             <ul>
-              <li><strong>最適デフォルト値:</strong> 不透明度0、ブラー0で隠し画像が最も鮮明に</li>
+              <li><strong>最適デフォルト値:</strong> 不透明度6~10、ブラー0で隠し画像が最も鮮明に</li>
               <li><strong>超細かい調整:</strong> 0.001ステップでの微細な効果調整が可能</li>
               <li><strong>負の値調整:</strong> シャープネス強化で逆方向の効果も実現</li>
               <li><strong>モード別最適化:</strong> 各縞模様タイプに最適化された調整項目</li>
