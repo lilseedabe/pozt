@@ -11,7 +11,7 @@ const ReverseMode = ({ onBack }) => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [processingTime, setProcessingTime] = useState(0);
-  const [memoryWarning, setMemoryWarning] = useState(false);
+  // memoryWarning state removed - it was not being used
   const [settings, setSettings] = useState({
     extractionMethod: 'pattern_subtraction', // 最軽量をデフォルト
     enhancementLevel: 1.5, // デフォルト値を削減
@@ -38,12 +38,7 @@ const ReverseMode = ({ onBack }) => {
       setAvailableMethods(methodsResponse.data);
       if (performanceResponse) {
         setPerformanceStats(performanceResponse.data);
-        
-        // メモリ使用率が高い場合の警告
-        const memoryUsage = parseFloat(performanceResponse.data.memory_utilization?.replace('%', '') || '0');
-        if (memoryUsage > 60) {
-          setMemoryWarning(true);
-        }
+        // Memory warning is now handled in memoryWarningDisplay component
       }
     } catch (error) {
       console.error('Failed to fetch methods:', error);
