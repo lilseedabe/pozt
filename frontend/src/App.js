@@ -5,6 +5,7 @@ import RegionSelector from './components/RegionSelector';
 import Settings from './components/Settings';
 import Preview from './components/Preview';
 import Result from './components/Result';
+import SessionManager from './components/SessionManager'; // セッション管理を追加
 import './styles/App.css';
 
 function App() {
@@ -28,12 +29,23 @@ function App() {
 
   return (
     <div className="app">
+      {/* セッション管理コンポーネントを追加 */}
+      <SessionManager />
+      
       <header className="app-header">
         <div className="app-title-container">
           <h1 className="app-title">pozt</h1>
           <div className="app-title-bar"></div>
         </div>
         <p className="app-subtitle">Pattern Optical Zone Technology - 視覚の魔法を体験しよう</p>
+        
+        {/* アクセス制御情報表示 */}
+        <div className="access-control-info">
+          <div className="access-info-badge">
+            <span className="security-icon">🔒</span>
+            <span className="security-text">セキュアアクセス - pozt.iodo.co.jp 認証済み</span>
+          </div>
+        </div>
       </header>
 
       <main className="app-main">
@@ -41,6 +53,11 @@ function App() {
           <p>
             光学パターン技術を活用して、見る角度や表示環境によって変化する驚きの視覚アート作品を作成できる無料のウェブアプリケーションです。
           </p>
+          <div className="security-notice">
+            <small>
+              🛡️ このアプリケーションは安全な接続で保護されています。セッションは30分間有効です。
+            </small>
+          </div>
         </div>
 
         <div className="app-steps">
@@ -97,6 +114,9 @@ function App() {
 
       <footer className="app-footer">
         <p>&copy; 2025 pozt - Pattern Optical Zone Technology</p>
+        <div className="footer-security">
+          <small>🔐 Secured by domain access control | Session timeout: 30 minutes</small>
+        </div>
       </footer>
     </div>
   );
