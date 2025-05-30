@@ -1,290 +1,345 @@
-# backend/patterns/reverse.py - 超高速化・メモリ最適化版
+# backend/patterns/reverse.py - 超軽量・メモリスパイク対策版（512MB制限対応）
 import numpy as np
 import cv2
 from PIL import Image
+import gc
+import sys
 from core.image_utils import ensure_array, ensure_pil
+
+# **メモリ制限対応: グローバル設定**
+MAX_IMAGE_DIMENSION = 1024  # 最大サイズを1024pxに制限
+MEMORY_SAFE_SIZE = 800      # 安全サイズ
+CHUNK_SIZE = 256           # チャンク処理サイズ
 
 def extract_hidden_image_from_moire(moire_img, method="fourier_analysis", enhancement_level=2.0):
     """
-    モアレ効果画像から隠し画像を抽出（超高速化版）
-    CPU使用率を大幅削減し、メモリ効率を最大限改善
+    モアレ効果画像から隠し画像を抽出（超軽量・メモリスパイク対策版）
+    512MB制限環境でも安全に動作するよう最適化
     """
-    moire_array = ensure_array(moire_img).astype(np.float32)  # float64→float32で2倍高速化
+    # **メモリ対策1: 即座のガベージコレクション**
+    gc.collect()
     
-    if method == "fourier_analysis":
-        return extract_via_fourier_analysis_optimized(moire_array, enhancement_level)
-    elif method == "frequency_filtering":
-        return extract_via_frequency_filtering_optimized(moire_array, enhancement_level)
-    elif method == "pattern_subtraction":
-        return extract_via_pattern_subtraction_optimized(moire_array, enhancement_level)
-    else:
-        return extract_via_adaptive_detection_optimized(moire_array, enhancement_level)
+    # **メモリ対策2: 入力画像の軽量化**
+    moire_array = prepare_lightweight_image(moire_img)
+    
+    try:
+        if method == "pattern_subtraction":
+            # 最もメモリ効率的な方法を優先
+            return extract_via_pattern_subtraction_ultra_light(moire_array, enhancement_level)
+        elif method == "frequency_filtering":
+            return extract_via_frequency_filtering_ultra_light(moire_array, enhancement_level)
+        elif method == "adaptive_detection":
+            return extract_via_adaptive_detection_ultra_light(moire_array, enhancement_level)
+        else:  # fourier_analysis
+            return extract_via_fourier_analysis_ultra_light(moire_array, enhancement_level)
+    finally:
+        # **メモリ対策3: 処理後の即座クリーンアップ**
+        del moire_array
+        gc.collect()
 
-def extract_via_fourier_analysis_optimized(moire_array, enhancement_level=2.0):
+def prepare_lightweight_image(moire_img):
     """
-    フーリエ解析による隠し画像抽出（超高速化版）
-    従来比5-10倍高速化、メモリ使用量50%削減
+    画像を軽量化して準備（メモリスパイク防止）
+    """
+    # **軽量化1: 配列変換の最適化**
+    if isinstance(moire_img, np.ndarray):
+        img_array = moire_img
+    else:
+        img_array = np.array(moire_img, dtype=np.uint8)  # 最初からuint8
+    
+    height, width = img_array.shape[:2]
+    
+    # **軽量化2: 積極的なサイズ制限**
+    if max(height, width) > MAX_IMAGE_DIMENSION:
+        # アスペクト比保持でリサイズ
+        scale = MAX_IMAGE_DIMENSION / max(height, width)
+        new_height = int(height * scale)
+        new_width = int(width * scale)
+        
+        # OpenCVで高速リサイズ（メモリ効率的）
+        img_array = cv2.resize(img_array, (new_width, new_height), interpolation=cv2.INTER_AREA)
+        
+        print(f"📏 Image resized to {new_width}x{new_height} for memory efficiency")
+    
+    # **軽量化3: さらに大きい場合の緊急サイズ制限**
+    if max(img_array.shape[:2]) > MEMORY_SAFE_SIZE:
+        scale = MEMORY_SAFE_SIZE / max(img_array.shape[:2])
+        new_h = int(img_array.shape[0] * scale)
+        new_w = int(img_array.shape[1] * scale)
+        img_array = cv2.resize(img_array, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        print(f"⚠️ Emergency resize to {new_w}x{new_h} for memory safety")
+    
+    return img_array
+
+def extract_via_pattern_subtraction_ultra_light(moire_array, enhancement_level=2.0):
+    """
+    パターン減算による抽出（超軽量版）- 最もメモリ効率的な方法
     """
     height, width = moire_array.shape[:2]
     
-    # **最適化1: グレースケール変換の高速化**
+    # **軽量化1: グレースケール変換の最適化**
     if len(moire_array.shape) == 3:
-        # OpenCVによる最適化されたグレースケール変換（3-5倍高速）
-        gray = cv2.cvtColor(moire_array.astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)
+        gray = cv2.cvtColor(moire_array, cv2.COLOR_RGB2GRAY)
+        del moire_array  # 即座に削除
+        gc.collect()
     else:
-        gray = moire_array.astype(np.float32)
+        gray = moire_array.copy()
+        del moire_array
     
-    # **最適化2: メモリ効率的なFFT処理**
-    # dtype指定でメモリ使用量半減
-    f_transform = np.fft.fft2(gray, norm='ortho')  # 正規化で数値安定性向上
-    f_shift = np.fft.fftshift(f_transform)
+    # **軽量化2: 小さなサンプルでの相関計算**
+    sample_size = min(64, height // 8, width // 8)  # さらに小さなサンプル
+    sample_y = height // 4
+    sample_x = width // 4
     
-    # **最適化3: ベクトル化フィルタ生成（従来の10倍高速）**
-    center_y, center_x = height // 2, width // 2
+    gray_sample = gray[sample_y:sample_y+sample_size, sample_x:sample_x+sample_size].astype(np.float32)
     
-    # 座標グリッドを一度に生成（ベクトル化）
-    y_coords, x_coords = np.ogrid[:height, :width]
+    # **軽量化3: 効率的パターン生成（メモリを使い回し）**
+    y_pattern = np.arange(sample_size, dtype=np.uint8).reshape(-1, 1)
+    h_pattern_sample = np.broadcast_to((y_pattern % 2) * 255, (sample_size, sample_size)).astype(np.float32)
     
-    # 距離計算をベクトル化（ループ完全排除）
-    distances_sq = (x_coords - center_x)**2 + (y_coords - center_y)**2
+    x_pattern = np.arange(sample_size, dtype=np.uint8).reshape(1, -1)
+    v_pattern_sample = np.broadcast_to((x_pattern % 2) * 255, (sample_size, sample_size)).astype(np.float32)
     
-    # **最適化4: 適応的半径計算**
-    base_radius = min(height, width) // 12  # より効果的な半径
-    inner_radius_sq = (base_radius // 2)**2
-    outer_radius_sq = (base_radius * 2)**2
+    # **軽量化4: 相関計算の効率化**
+    h_corr = np.corrcoef(gray_sample.flatten(), h_pattern_sample.flatten())[0, 1]
+    v_corr = np.corrcoef(gray_sample.flatten(), v_pattern_sample.flatten())[0, 1]
     
-    # **最適化5: 複合マスク生成（一度の計算で完了）**
-    # ローパス + バンドパスを同時計算
-    low_pass_mask = (distances_sq <= (base_radius**2)).astype(np.float32)
-    band_pass_mask = ((distances_sq >= inner_radius_sq) & 
-                     (distances_sq <= outer_radius_sq)).astype(np.float32)
+    # 中間データを削除
+    del gray_sample, h_pattern_sample, v_pattern_sample
+    gc.collect()
     
-    # 強調レベルに応じた動的重み調整
-    enhancement_factor = np.clip(enhancement_level * 0.3, 0.5, 2.0)
-    
-    # **最適化6: 効率的フィルタ適用**
-    combined_filter = low_pass_mask + band_pass_mask * enhancement_factor
-    filtered_shift = f_shift * combined_filter
-    
-    # **最適化7: 高速逆FFT**
-    f_ishift = np.fft.ifftshift(filtered_shift)
-    img_back = np.fft.ifft2(f_ishift, norm='ortho')
-    result_magnitude = np.abs(img_back)  # 実部のみ使用でメモリ節約
-    
-    # **最適化8: ベクトル化正規化（従来の5倍高速）**
-    result_min = np.min(result_magnitude)
-    result_max = np.max(result_magnitude)
-    result_range = result_max - result_min
-    
-    if result_range > 1e-6:  # ゼロ除算防止
-        # 完全ベクトル化正規化
-        normalized = (result_magnitude - result_min) / result_range
-        result = np.clip(normalized * 255 * enhancement_level, 0, 255)
+    # **軽量化5: チャンク処理によるパターン減算**
+    if abs(h_corr) > abs(v_corr):
+        # 水平パターン
+        pattern_type = "horizontal"
+        correlation_strength = abs(h_corr)
     else:
-        result = np.full_like(result_magnitude, 128, dtype=np.float32)
+        # 垂直パターン
+        pattern_type = "vertical"
+        correlation_strength = abs(v_corr)
     
-    # **最適化9: 効率的RGB変換**
-    if len(moire_array.shape) == 3:
-        # ブロードキャストで高速RGB変換
-        result_rgb = np.stack([result, result, result], axis=2)
-        return result_rgb.astype(np.uint8)
+    # **軽量化6: メモリ効率的な結果生成**
+    result = process_in_chunks(gray, pattern_type, correlation_strength, enhancement_level)
     
-    return result.astype(np.uint8)
+    del gray
+    gc.collect()
+    
+    # **軽量化7: RGB変換の最適化**
+    if len(result.shape) == 2:
+        # グレースケールのまま返す（メモリ節約）
+        return result
+    else:
+        return result
 
-def extract_via_frequency_filtering_optimized(moire_array, enhancement_level=2.0):
+def process_in_chunks(gray, pattern_type, correlation_strength, enhancement_level):
     """
-    周波数フィルタリングによる抽出（超高速化版）
+    チャンク処理でメモリ使用量を制限
+    """
+    height, width = gray.shape
+    result = np.zeros_like(gray, dtype=np.uint8)
+    
+    # **チャンク処理: 行ごとに処理**
+    chunk_height = min(CHUNK_SIZE, height)
+    
+    for start_y in range(0, height, chunk_height):
+        end_y = min(start_y + chunk_height, height)
+        chunk = gray[start_y:end_y].astype(np.float32)
+        
+        # パターン生成
+        if pattern_type == "horizontal":
+            y_indices = np.arange(start_y, end_y).reshape(-1, 1)
+            pattern_chunk = np.broadcast_to((y_indices % 2) * 255.0, chunk.shape)
+        else:  # vertical
+            x_indices = np.arange(width).reshape(1, -1)
+            pattern_chunk = np.broadcast_to((x_indices % 2) * 255.0, chunk.shape)
+        
+        # パターン減算
+        subtraction_strength = np.clip(correlation_strength * 0.6, 0.2, 0.7)
+        difference = chunk - pattern_chunk * subtraction_strength
+        
+        # 強調処理
+        enhanced = difference * enhancement_level + 128
+        result[start_y:end_y] = np.clip(enhanced, 0, 255).astype(np.uint8)
+        
+        # チャンクデータを削除
+        del chunk, pattern_chunk, difference, enhanced
+    
+    return result
+
+def extract_via_frequency_filtering_ultra_light(moire_array, enhancement_level=2.0):
+    """
+    周波数フィルタリング（超軽量版）
     """
     height, width = moire_array.shape[:2]
     
-    # **最適化: グレースケール変換**
+    # グレースケール変換
     if len(moire_array.shape) == 3:
-        gray = cv2.cvtColor(moire_array.astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)
+        gray = cv2.cvtColor(moire_array, cv2.COLOR_RGB2GRAY)
+        del moire_array
+        gc.collect()
     else:
-        gray = moire_array.astype(np.float32)
+        gray = moire_array.copy()
+        del moire_array
     
-    # **最適化: 適応的ブラー（カーネルサイズ自動調整）**
-    kernel_size = max(3, min(height, width) // 200) | 1  # 奇数にする
+    # **軽量化: 小さなカーネルサイズ**
+    kernel_size = max(3, min(height, width) // 300) | 1
+    
+    # ブラー処理
     blurred = cv2.GaussianBlur(gray, (kernel_size, kernel_size), 0)
     
-    # **最適化: 適応的エッジ検出**
-    # 画像の特性に応じて閾値を自動調整
+    # エッジ検出
     mean_intensity = np.mean(blurred)
-    low_threshold = max(20, int(mean_intensity * 0.3))
-    high_threshold = min(150, int(mean_intensity * 0.8))
+    low_threshold = max(15, int(mean_intensity * 0.2))
+    high_threshold = min(100, int(mean_intensity * 0.6))
     
-    edges = cv2.Canny(blurred.astype(np.uint8), low_threshold, high_threshold)
+    edges = cv2.Canny(blurred, low_threshold, high_threshold)
+    del blurred
     
-    # **最適化: 効率的モルフォロジー演算**
-    kernel_size = max(3, min(height, width) // 300)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
-    processed_edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
+    # モルフォロジー演算
+    morph_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    processed_edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, morph_kernel)
+    del edges
     
-    # **最適化: ベクトル化マスク生成**
+    # マスク処理
     stripe_mask = (processed_edges > 0).astype(np.float32)
+    del processed_edges
     
-    # **最適化: 適応的ブラー強度**
-    blur_intensity = max(5, min(height, width) // 150) | 1
-    smoothed_mask = cv2.GaussianBlur(stripe_mask, (blur_intensity, blur_intensity), 0)
+    # ブラー
+    smoothed_mask = cv2.GaussianBlur(stripe_mask, (5, 5), 0)
+    del stripe_mask
     
-    # **最適化: 反転マスクで隠し画像抽出**
+    # 結果生成
     hidden_mask = 1.0 - smoothed_mask
+    result = gray.astype(np.float32) * hidden_mask * enhancement_level
     
-    # **最適化: 強調処理の効率化**
-    enhanced_result = gray * hidden_mask * enhancement_level
+    del gray, smoothed_mask, hidden_mask
+    gc.collect()
     
-    # **最適化: 適応的後処理**
-    final_blur = max(3, kernel_size // 2) | 1
-    result = cv2.GaussianBlur(enhanced_result, (final_blur, final_blur), 0)
-    result = np.clip(result, 0, 255)
-    
-    # **最適化: RGB変換**
-    if len(moire_array.shape) == 3:
-        result_rgb = np.stack([result, result, result], axis=2)
-        return result_rgb.astype(np.uint8)
-    
-    return result.astype(np.uint8)
+    return np.clip(result, 0, 255).astype(np.uint8)
 
-def extract_via_pattern_subtraction_optimized(moire_array, enhancement_level=2.0):
+def extract_via_adaptive_detection_ultra_light(moire_array, enhancement_level=2.0):
     """
-    パターン減算による抽出（超高速化版）
+    適応的検出（超軽量版）
     """
     height, width = moire_array.shape[:2]
     
-    # **最適化: グレースケール変換**
+    # グレースケール変換
     if len(moire_array.shape) == 3:
-        gray = cv2.cvtColor(moire_array.astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)
+        gray = cv2.cvtColor(moire_array, cv2.COLOR_RGB2GRAY)
+        del moire_array
+        gc.collect()
     else:
-        gray = moire_array.astype(np.float32)
+        gray = moire_array.copy()
+        del moire_array
     
-    # **最適化: ベクトル化パターン生成**
-    # 水平パターン（完全ベクトル化）
-    y_indices = np.arange(height, dtype=np.int32).reshape(-1, 1)
-    horizontal_pattern = ((y_indices % 2) * 255).astype(np.float32)
-    horizontal_pattern = np.broadcast_to(horizontal_pattern, (height, width))
+    # **軽量化: 小さなウィンドウサイズ**
+    window_size = max(5, min(height, width) // 150) | 1
     
-    # 垂直パターン（完全ベクトル化）
-    x_indices = np.arange(width, dtype=np.int32).reshape(1, -1)
-    vertical_pattern = ((x_indices % 2) * 255).astype(np.float32)
-    vertical_pattern = np.broadcast_to(vertical_pattern, (height, width))
+    # 局所統計計算（軽量版）
+    kernel = np.ones((window_size, window_size), np.float32) / (window_size * window_size)
+    local_mean = cv2.filter2D(gray.astype(np.float32), -1, kernel)
     
-    # **最適化: 高速相関計算（テンプレートマッチング削除）**
-    # より効率的な相関計算
-    sample_size = min(100, height // 4, width // 4)
-    gray_sample = gray[:sample_size, :sample_size]
-    h_pattern_sample = horizontal_pattern[:sample_size, :sample_size]
-    v_pattern_sample = vertical_pattern[:sample_size, :sample_size]
+    # 簡易的な分散計算
+    diff = gray.astype(np.float32) - local_mean
+    local_variance = cv2.filter2D(diff ** 2, -1, kernel)
+    local_std = np.sqrt(np.maximum(local_variance, 1.0))
     
-    # 正規化クロス相関（ベクトル化）
-    h_correlation = np.corrcoef(gray_sample.flatten(), h_pattern_sample.flatten())[0, 1]
-    v_correlation = np.corrcoef(gray_sample.flatten(), v_pattern_sample.flatten())[0, 1]
+    del diff, local_variance
     
-    # **最適化: パターン選択と減算**
-    if abs(h_correlation) > abs(v_correlation):
-        estimated_pattern = horizontal_pattern
-        correlation_strength = abs(h_correlation)
-    else:
-        estimated_pattern = vertical_pattern
-        correlation_strength = abs(v_correlation)
-    
-    # **最適化: 適応的減算強度**
-    subtraction_strength = np.clip(correlation_strength * 0.7, 0.3, 0.8)
-    difference = gray - estimated_pattern * subtraction_strength
-    
-    # **最適化: 適応的強調とバイアス調整**
-    adaptive_enhancement = enhancement_level * (1.0 + correlation_strength)
-    result = difference * adaptive_enhancement + 128
-    result = np.clip(result, 0, 255)
-    
-    # **最適化: RGB変換**
-    if len(moire_array.shape) == 3:
-        result_rgb = np.stack([result, result, result], axis=2)
-        return result_rgb.astype(np.uint8)
-    
-    return result.astype(np.uint8)
-
-def extract_via_adaptive_detection_optimized(moire_array, enhancement_level=2.0):
-    """
-    適応的検出による抽出（超高速化版）
-    """
-    height, width = moire_array.shape[:2]
-    
-    # **最適化: グレースケール変換**
-    if len(moire_array.shape) == 3:
-        gray = cv2.cvtColor(moire_array.astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)
-    else:
-        gray = moire_array.astype(np.float32)
-    
-    # **最適化: 適応的カーネルサイズ**
-    kernel_size = max(5, min(height, width) // 100) | 1  # 奇数にする
-    
-    # **最適化: OpenCVによる高速局所統計計算**
-    # 平均フィルタ（OpenCV最適化）
-    kernel = np.ones((kernel_size, kernel_size), np.float32) / (kernel_size * kernel_size)
-    local_mean = cv2.filter2D(gray, -1, kernel)
-    
-    # **最適化: 効率的分散計算**
-    # (I - μ)² の計算をベクトル化
-    diff_squared = (gray - local_mean) ** 2
-    local_variance = cv2.filter2D(diff_squared, -1, kernel)
-    local_std = np.sqrt(np.maximum(local_variance, 1e-6))  # ゼロ除算防止
-    
-    # **最適化: 適応的閾値計算（ベクトル化）**
-    # 画像全体の統計を使用した適応的調整
+    # 適応的閾値
     global_std = np.std(gray)
-    adaptive_factor = np.clip(global_std / 50.0, 0.3, 1.5)
-    
+    adaptive_factor = np.clip(global_std / 60.0, 0.2, 1.2)
     adaptive_threshold = local_mean + local_std * adaptive_factor
     
-    # **最適化: ベクトル化マスク生成**
-    hidden_mask = (gray > adaptive_threshold).astype(np.float32)
+    del local_mean, local_std
     
-    # **最適化: エッジ保存スムージング（高速化）**
-    # bilateralFilterの代わりに効率的な処理
-    smoothed_kernel_size = max(5, kernel_size // 2) | 1
-    result = cv2.GaussianBlur(gray, (smoothed_kernel_size, smoothed_kernel_size), 0)
+    # マスク生成
+    hidden_mask = (gray.astype(np.float32) > adaptive_threshold).astype(np.float32)
+    del adaptive_threshold
     
-    # **最適化: 適応的強調処理**
-    # マスクの密度に基づく動的強調
-    mask_density = np.mean(hidden_mask)
-    dynamic_enhancement = enhancement_level * (1.0 + mask_density)
+    # 結果生成
+    result = gray.astype(np.float32) * hidden_mask * enhancement_level
     
-    result = result * hidden_mask * dynamic_enhancement
-    result = np.clip(result, 0, 255)
+    del gray, hidden_mask
+    gc.collect()
     
-    # **最適化: RGB変換**
-    if len(moire_array.shape) == 3:
-        result_rgb = np.stack([result, result, result], axis=2)
-        return result_rgb.astype(np.uint8)
-    
-    return result.astype(np.uint8)
+    return np.clip(result, 0, 255).astype(np.uint8)
 
-def create_bandpass_filter_optimized(height, width, inner_radius, outer_radius):
+def extract_via_fourier_analysis_ultra_light(moire_array, enhancement_level=2.0):
     """
-    バンドパスフィルタを作成（ベクトル化最適化版）
+    フーリエ解析（超軽量版）- 最小限の実装
     """
-    center_y, center_x = height // 2, width // 2
+    height, width = moire_array.shape[:2]
     
-    # **最適化: ベクトル化距離計算**
-    y_coords, x_coords = np.ogrid[:height, :width]
-    distance_sq = (x_coords - center_x)**2 + (y_coords - center_y)**2
+    # サイズ制限をさらに厳しく
+    if max(height, width) > 512:
+        scale = 512 / max(height, width)
+        new_h = int(height * scale)
+        new_w = int(width * scale)
+        if len(moire_array.shape) == 3:
+            resized = cv2.resize(moire_array, (new_w, new_h))
+            gray = cv2.cvtColor(resized, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = cv2.resize(moire_array, (new_w, new_h))
+        del moire_array, resized
+    else:
+        if len(moire_array.shape) == 3:
+            gray = cv2.cvtColor(moire_array, cv2.COLOR_RGB2GRAY)
+            del moire_array
+        else:
+            gray = moire_array.copy()
+            del moire_array
     
-    # **最適化: 効率的マスク生成**
-    inner_radius_sq = inner_radius ** 2
-    outer_radius_sq = outer_radius ** 2
+    gc.collect()
     
-    mask = ((distance_sq >= inner_radius_sq) & 
-            (distance_sq <= outer_radius_sq)).astype(np.float32)
+    # 簡易的なFFT処理
+    try:
+        f_transform = np.fft.fft2(gray.astype(np.float32))
+        f_shift = np.fft.fftshift(f_transform)
+        del f_transform
+        
+        # 簡易フィルタ
+        h, w = gray.shape
+        center_y, center_x = h // 2, w // 2
+        radius = min(h, w) // 8
+        
+        y, x = np.ogrid[:h, :w]
+        mask = ((x - center_x)**2 + (y - center_y)**2) <= radius**2
+        
+        filtered = f_shift * mask.astype(np.float32)
+        del f_shift, mask
+        
+        # 逆FFT
+        f_ishift = np.fft.ifftshift(filtered)
+        img_back = np.abs(np.fft.ifft2(f_ishift))
+        del filtered, f_ishift
+        
+        # 正規化
+        img_min, img_max = np.min(img_back), np.max(img_back)
+        if img_max > img_min:
+            result = (img_back - img_min) / (img_max - img_min) * 255 * enhancement_level
+        else:
+            result = np.full_like(img_back, 128)
+        
+        del img_back
+        
+    except Exception as e:
+        print(f"⚠️ FFT failed, using fallback: {e}")
+        # フォールバック：単純な処理
+        result = gray.astype(np.float32) * enhancement_level
     
-    return mask
+    del gray
+    gc.collect()
+    
+    return np.clip(result, 0, 255).astype(np.uint8)
 
 def enhance_extracted_image_optimized(extracted_img, method="histogram_equalization"):
     """
-    抽出された隠し画像を強調（最適化版）
+    抽出された隠し画像を強調（超軽量版）
     """
     if method == "histogram_equalization":
         if len(extracted_img.shape) == 3:
-            # **最適化: チャンネル別並列処理**
+            # チャンネル別処理
             result = np.zeros_like(extracted_img)
             for i in range(3):
                 result[:,:,i] = cv2.equalizeHist(extracted_img[:,:,i])
@@ -293,11 +348,8 @@ def enhance_extracted_image_optimized(extracted_img, method="histogram_equalizat
             return cv2.equalizeHist(extracted_img)
     
     elif method == "clahe":
-        # **最適化: 適応的CLAHE設定**
-        clip_limit = min(3.0, max(1.5, np.std(extracted_img) / 50.0))
-        tile_size = max(4, min(extracted_img.shape[0], extracted_img.shape[1]) // 100)
-        
-        clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(tile_size, tile_size))
+        # 軽量CLAHE設定
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
         
         if len(extracted_img.shape) == 3:
             result = np.zeros_like(extracted_img)
@@ -308,22 +360,17 @@ def enhance_extracted_image_optimized(extracted_img, method="histogram_equalizat
             return clahe.apply(extracted_img)
     
     elif method == "gamma_correction":
-        # **最適化: 適応的ガンマ値**
-        mean_brightness = np.mean(extracted_img)
-        gamma = 0.5 if mean_brightness < 100 else 0.7 if mean_brightness < 150 else 0.8
-        
-        # **最適化: ベクトル化ガンマ補正**
+        # 軽量ガンマ補正
+        gamma = 0.7
         normalized = extracted_img.astype(np.float32) / 255.0
         corrected = np.power(normalized, gamma)
         result = (corrected * 255.0).astype(np.uint8)
-        
+        del normalized, corrected
         return result
     
     return extracted_img
 
-# **新機能: 強化された隠し画像抽出**
+# エイリアス関数
 def enhance_extracted_image(extracted_img, method="histogram_equalization"):
-    """
-    抽出された隠し画像を強調（エイリアス関数）
-    """
+    """エイリアス関数（互換性維持）"""
     return enhance_extracted_image_optimized(extracted_img, method)
