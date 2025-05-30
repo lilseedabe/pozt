@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, Response, RedirectResponse
-from api.routes import image, health
+from api.routes import image, health, reverse  # reverse を追加
 from config.app import get_settings
 
 # アクセス制御ミドルウェアをインポート
@@ -35,6 +35,7 @@ app.add_middleware(
 # APIルート
 app.include_router(health.router, tags=["Health"])
 app.include_router(image.router, prefix="/api", tags=["Image"])
+app.include_router(reverse.router, prefix="/api", tags=["Reverse"])  # リバース機能ルートを追加
 
 # React ビルド成果物へのパス
 BASE_DIR = os.path.dirname(__file__)
