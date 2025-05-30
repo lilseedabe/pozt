@@ -14,7 +14,7 @@ const initialState = {
     overlayRatio: 0.4,
     // 最適化されたデフォルト値
     strength: 0.02,
-    opacity: 0.0,           // 0.6 → 0.0 に変更（最適化）
+    opacity: 0.6,           // 0.6 → 0.0 に変更（最適化）
     enhancementFactor: 1.2,
     frequency: 1,
     blurRadius: 0,          // 5 → 0 に変更（最適化）
