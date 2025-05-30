@@ -757,7 +757,6 @@ def evaluate_pattern_quality(pattern_result):
 
 def create_optimized_overlay_pattern(hidden_array, pattern_type, opacity, blur_radius, contrast_boost, sharpness_boost):
     """最適化パラメータ対応オーバーレイパターン生成"""
-    from patterns.overlay import create_overlay_moire_pattern
     
     print(f"🎯 Creating optimized overlay pattern: opacity={opacity}, blur={blur_radius}, sharpness={sharpness_boost}")
     
@@ -779,18 +778,53 @@ def create_optimized_overlay_pattern(hidden_array, pattern_type, opacity, blur_r
     
     # NumPy配列に戻す
     processed_hidden_array = np.array(hidden_pil)
+    height, width = processed_hidden_array.shape[:2]
     
-    # 2. 透明度を考慮したパターン生成（修正版）
-    # 最小透明度を確保して、常にオーバーレイ効果を維持
-    adjusted_opacity = max(0.3, min(1.0, opacity))  # 最小値を0.3に設定
+    # 2. プロトタイプと同じオーバーレイ処理を実装
+    print(f"  📋 Using prototype-compatible overlay processing")
     
-    if opacity <= 0.001:
-        print(f"  🎯 Low opacity detected ({opacity}), adjusting to minimum effective value ({adjusted_opacity})")
+    # opacity=0の場合はプロトタイプのデフォルト0.6を使用
+    effective_opacity = opacity if opacity > 0.001 else 0.6
+    print(f"  🎯 Effective opacity: {effective_opacity}")
     
-    # 常に通常のオーバーレイ処理を使用
-    print(f"  📋 Using standard overlay processing with opacity={adjusted_opacity}")
-    base_pattern = create_overlay_moire_pattern(processed_hidden_array, pattern_type, adjusted_opacity)
-    result = base_pattern
+    # グレースケール変換
+    if len(processed_hidden_array.shape) == 3:
+        hidden_gray = cv2.cvtColor(processed_hidden_array, cv2.COLOR_RGB2GRAY).astype(np.float32)
+    else:
+        hidden_gray = processed_hidden_array.astype(np.float32)
+    
+    # 隠し画像を二値化 - 黒い部分（暗い部分）を抽出（プロトタイプと同じ）
+    _, binary_mask = cv2.threshold(hidden_gray, 100, 255, cv2.THRESH_BINARY_INV)
+    
+    # マスクをぼかして滑らかにする（プロトタイプと同じ）
+    blurred_mask = cv2.GaussianBlur(binary_mask, (5, 5), 0)
+    
+    # マスクを正規化（プロトタイプと同じ）
+    mask = blurred_mask / 255.0 * effective_opacity
+    
+    # 均一な縞模様を作成（プロトタイプと同じ）
+    stripes = np.zeros((height, width, 3), dtype=np.uint8)
+    
+    if pattern_type == "horizontal":
+        # 横縞パターン（プロトタイプと同じ）
+        for y in range(height):
+            stripe_value = 255 if y % 2 == 0 else 0
+            stripes[y, :] = [stripe_value, stripe_value, stripe_value]
+    else:
+        # 縦縞パターン（プロトタイプと同じ）
+        for x in range(width):
+            stripe_value = 255 if x % 2 == 0 else 0
+            stripes[:, x] = [stripe_value, stripe_value, stripe_value]
+    
+    # 均一なグレー（プロトタイプと同じ）
+    gray = np.ones((height, width, 3), dtype=np.float32) * 128
+    
+    # マスクを使って縞模様とグレーを合成（プロトタイプと同じ）
+    result = np.zeros((height, width, 3), dtype=np.float32)
+    for i in range(3):
+        result[:,:,i] = stripes[:,:,i] * (1 - mask) + gray[:,:,i] * mask
+    
+    result = result.astype(np.uint8)
     
     # 3. コントラスト調整
     if abs(contrast_boost - 1.0) > 0.01:
