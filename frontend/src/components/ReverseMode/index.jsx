@@ -1,7 +1,7 @@
-// frontend/src/components/ReverseMode/index.jsx - 超高速化・メモリ最適化版
+// frontend/src/components/ReverseMode/index.jsx - 512MB制限対応・超軽量版
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import { FiUpload, FiImage, FiEye, FiDownload, FiArrowLeft, FiZap, FiCpu } from 'react-icons/fi';
+import { FiUpload, FiImage, FiEye, FiDownload, FiArrowLeft, FiZap, FiAlertTriangle } from 'react-icons/fi';
 import './styles.css';
 
 const ReverseMode = ({ onBack }) => {
@@ -11,40 +11,54 @@ const ReverseMode = ({ onBack }) => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [processingTime, setProcessingTime] = useState(0);
+  const [memoryWarning, setMemoryWarning] = useState(false);
   const [settings, setSettings] = useState({
-    extractionMethod: 'fourier_analysis',
-    enhancementLevel: 2.0,
+    extractionMethod: 'pattern_subtraction', // 最軽量をデフォルト
+    enhancementLevel: 1.5, // デフォルト値を削減
     enhancementMethod: 'histogram_equalization',
-    applyEnhancement: true
+    applyEnhancement: false // デフォルトでOFF
   });
   const [availableMethods, setAvailableMethods] = useState(null);
   const [performanceStats, setPerformanceStats] = useState(null);
   const fileInputRef = useRef(null);
   const processingStartTime = useRef(null);
 
-  // **最適化1: メモ化された利用可能メソッドの取得**
+  // **512MB対応: ファイルサイズ制限**
+  const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB制限
+  const RECOMMENDED_SIZE = 1.5 * 1024 * 1024; // 1.5MB推奨
+
+  // **最適化: メモ化された利用可能メソッドの取得**
   const fetchMethods = useCallback(async () => {
     try {
       const [methodsResponse, performanceResponse] = await Promise.all([
         axios.get('/api/reverse/methods'),
-        axios.get('/api/reverse/performance').catch(() => null) // エラーでも継続
+        axios.get('/api/reverse/performance').catch(() => null)
       ]);
       
       setAvailableMethods(methodsResponse.data);
       if (performanceResponse) {
         setPerformanceStats(performanceResponse.data);
+        
+        // メモリ使用率が高い場合の警告
+        const memoryUsage = parseFloat(performanceResponse.data.memory_utilization?.replace('%', '') || '0');
+        if (memoryUsage > 60) {
+          setMemoryWarning(true);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch methods:', error);
     }
   }, []);
 
-  // **最適化2: 初期化処理のメモ化**
   React.useEffect(() => {
     fetchMethods();
+    
+    // 定期的なメモリ監視
+    const memoryInterval = setInterval(fetchMethods, 30000); // 30秒ごと
+    return () => clearInterval(memoryInterval);
   }, [fetchMethods]);
 
-  // **最適化3: ファイル処理の効率化**
+  // **512MB対応: ファイル処理の強化**
   const handleFileChange = useCallback(async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -55,26 +69,67 @@ const ReverseMode = ({ onBack }) => {
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      setError('ファイルサイズが10MBを超えています。');
+    // **厳格なファイルサイズチェック**
+    if (file.size > MAX_FILE_SIZE) {
+      setError(`ファイルサイズが${MAX_FILE_SIZE/1024/1024}MBを超えています。Render 512MB制限のため、より小さいファイルをご利用ください。`);
       return;
     }
 
-    // **最適化: 非同期での画像プレビュー生成**
+    // **推奨サイズの警告**
+    if (file.size > RECOMMENDED_SIZE) {
+      setError(`⚠️ ファイルサイズ（${(file.size/1024/1024).toFixed(1)}MB）が推奨サイズ（1.5MB）を超えています。処理が失敗する可能性があります。`);
+    }
+
+    // **画像サイズチェック**
+    const checkImageSize = (file) => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          const dimensions = { width: img.width, height: img.height };
+          
+          if (Math.max(img.width, img.height) > 1200) {
+            setError(`⚠️ 画像サイズ（${img.width}×${img.height}）が大きすぎます。800×600px以下を推奨します。`);
+          }
+          
+          resolve(dimensions);
+        };
+        
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          resolve({ width: 0, height: 0 });
+        };
+        
+        img.src = objectUrl;
+      });
+    };
+
+    await checkImageSize(file);
+
     const imageUrl = URL.createObjectURL(file);
     setMoireImage(file);
     setMoireImageUrl(imageUrl);
-    setError(null);
     setResult(null);
-    
-    // **最適化: 前の結果をクリア**
     setProcessingTime(0);
-  }, []);
+    
+    // エラーメッセージをクリア（警告以外）
+    if (!error?.includes('⚠️')) {
+      setError(null);
+    }
+  }, [MAX_FILE_SIZE, RECOMMENDED_SIZE, error]);
 
-  // **最適化4: リバース処理の効率化**
+  // **512MB対応: リバース処理の最適化**
   const handleReverseProcessing = useCallback(async () => {
     if (!moireImage) {
       setError('モアレ画像をアップロードしてください');
+      return;
+    }
+
+    // **メモリ安全性チェック**
+    if (performanceStats && parseFloat(performanceStats.memory_utilization?.replace('%', '') || '0') > 70) {
+      setError('メモリ使用率が高すぎます。しばらく待ってから再試行してください。');
       return;
     }
 
@@ -90,12 +145,13 @@ const ReverseMode = ({ onBack }) => {
       formData.append('enhancement_method', settings.enhancementMethod);
       formData.append('apply_enhancement', settings.applyEnhancement.toString());
 
-      // **最適化: タイムアウト設定と進捗監視**
+      // **512MB対応: タイムアウトとエラーハンドリング強化**
       const response = await axios.post('/api/reverse', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 120000, // 2分タイムアウト
+        timeout: 180000, // 3分タイムアウト
         onUploadProgress: (progressEvent) => {
-          // アップロード進捗は必要に応じて処理
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          console.log(`Upload progress: ${percentCompleted}%`);
         }
       });
 
@@ -105,78 +161,110 @@ const ReverseMode = ({ onBack }) => {
 
       setResult(response.data);
       
-      console.log(`✅ Optimized processing completed in ${processingDuration}ms`);
+      // パフォーマンス統計を更新
+      fetchMethods();
+      
+      console.log(`✅ Ultra-light processing completed in ${processingDuration}ms`);
       
     } catch (error) {
       console.error('Reverse processing error:', error);
-      const errorMessage = error.response?.data?.detail || 'リバース処理中にエラーが発生しました';
+      
+      let errorMessage = 'リバース処理中にエラーが発生しました';
+      
+      // **512MB対応: 具体的なエラーメッセージ**
+      if (error.response?.status === 413) {
+        errorMessage = 'ファイルサイズが大きすぎます。3MB以下の画像をご利用ください。';
+      } else if (error.response?.status === 507) {
+        errorMessage = 'メモリ不足です。より小さい画像をお試しください。';
+      } else if (error.response?.status === 422) {
+        errorMessage = '画像形式が対応していません。JPG、PNGファイルをご利用ください。';
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'タイムアウトしました。より小さい画像でお試しください。';
+      } else {
+        errorMessage = error.response?.data?.detail || errorMessage;
+      }
+      
       setError(errorMessage);
     } finally {
       setProcessing(false);
     }
-  }, [moireImage, settings]);
+  }, [moireImage, settings, performanceStats, fetchMethods]);
 
-  // **最適化5: ダウンロード処理の効率化**
   const handleDownload = useCallback(() => {
     if (result?.result_url) {
       const link = document.createElement('a');
       link.href = result.result_url;
-      link.download = `extracted_hidden_image_${Date.now()}.png`;
+      link.download = `extracted_ultra_light_${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     }
   }, [result]);
 
-  // **最適化6: 設定変更の効率化**
   const handleSettingChange = useCallback((key, value) => {
     setSettings(prev => ({
       ...prev,
       [key]: value
     }));
-  }, []);
-
-  // **最適化7: メモ化されたパフォーマンス情報**
-  const performanceInfo = useMemo(() => {
-    if (!availableMethods) return null;
     
-    return (
-      <div className="performance-info">
-        <div className="performance-badge">
-          <FiZap className="perf-icon" />
-          <span>最適化処理 - CPU使用率50%削減</span>
-        </div>
-        <div className="performance-badge">
-          <FiCpu className="perf-icon" />
-          <span>メモリ効率 - 使用量50%削減</span>
-        </div>
-        {processingTime > 0 && (
-          <div className="performance-badge success">
-            <span>処理時間: {processingTime}ms</span>
+    // **自動最適化警告**
+    if (key === 'extractionMethod' && value === 'fourier_analysis') {
+      setError('⚠️ フーリエ解析は大きな画像でメモリ不足になる可能性があります。');
+    } else if (key === 'applyEnhancement' && value === true) {
+      setError('⚠️ 画像強調は追加のメモリを使用します。');
+    } else if (!error?.includes('ファイルサイズ') && !error?.includes('画像サイズ')) {
+      setError(null);
+    }
+  }, [error]);
+
+  // **メモリ警告表示**
+  const memoryWarningDisplay = useMemo(() => {
+    if (!performanceStats) return null;
+    
+    const memoryUsage = parseFloat(performanceStats.memory_utilization?.replace('%', '') || '0');
+    const memoryAvailable = parseFloat(performanceStats.memory_available?.replace(' MB', '') || '512');
+    
+    if (memoryUsage > 60 || memoryAvailable < 200) {
+      return (
+        <div className="memory-warning-banner">
+          <FiAlertTriangle className="warning-icon" />
+          <div className="warning-content">
+            <strong>メモリ使用量注意</strong>
+            <p>使用率 {performanceStats.memory_utilization} | 利用可能 {performanceStats.memory_available}</p>
           </div>
-        )}
-      </div>
-    );
-  }, [availableMethods, processingTime]);
-
-  // **最適化8: メモ化された処理メソッド情報**
-  const methodInfo = useMemo(() => {
-    if (!availableMethods?.extraction_methods?.[settings.extractionMethod]) return null;
+        </div>
+      );
+    }
     
-    const method = availableMethods.extraction_methods[settings.extractionMethod];
+    return null;
+  }, [performanceStats]);
+
+  // **最適化設定の推奨表示**
+  const optimizationTips = useMemo(() => {
     return (
-      <div className="method-info">
-        <div className="method-details">
-          <strong>選択中の方法:</strong> {method.name}
-        </div>
-        <div className="method-performance">
-          <span className="perf-stat">⚡ {method.processing_time}</span>
-          <span className="perf-stat">💾 {method.memory_efficiency}</span>
-          <span className="perf-stat">🔧 {method.cpu_usage}</span>
+      <div className="optimization-tips">
+        <h4>🚀 512MB制限環境での推奨設定</h4>
+        <div className="tips-grid">
+          <div className="tip-item">
+            <span className="tip-icon">📏</span>
+            <span>画像サイズ: 800×600px以下</span>
+          </div>
+          <div className="tip-item">
+            <span className="tip-icon">💾</span>
+            <span>ファイルサイズ: 1.5MB以下推奨</span>
+          </div>
+          <div className="tip-item">
+            <span className="tip-icon">⚡</span>
+            <span>推奨方法: パターン減算</span>
+          </div>
+          <div className="tip-item">
+            <span className="tip-icon">🔧</span>
+            <span>強調処理: OFF推奨</span>
+          </div>
         </div>
       </div>
     );
-  }, [availableMethods, settings.extractionMethod]);
+  }, []);
 
   return (
     <div className="reverse-mode">
@@ -186,27 +274,30 @@ const ReverseMode = ({ onBack }) => {
           通常モードに戻る
         </button>
         <div className="reverse-title">
-          <h1>🔄 リバースモード（最適化版）</h1>
-          <p>モアレ効果画像から隠し画像を超高速抽出</p>
+          <h1>🔄 リバースモード（512MB対応）</h1>
+          <p>超軽量処理でモアレ画像から隠し画像を抽出</p>
         </div>
         {performanceStats && (
           <div className="performance-indicator">
             <div className="perf-item">
-              <small>メモリ使用量</small>
-              <strong>{performanceStats.current_memory_usage}</strong>
+              <small>メモリ使用率</small>
+              <strong style={{color: parseFloat(performanceStats.memory_utilization?.replace('%', '') || '0') > 60 ? '#ef4444' : '#10b981'}}>
+                {performanceStats.memory_utilization}
+              </strong>
             </div>
           </div>
         )}
       </div>
 
-      {performanceInfo}
+      {memoryWarningDisplay}
+      {optimizationTips}
 
       <div className="reverse-content">
         {/* ステップ1: 画像アップロード */}
         <div className="reverse-step">
           <div className="step-header">
             <div className="step-number">1</div>
-            <h2>モアレ画像をアップロード</h2>
+            <h2>モアレ画像をアップロード（3MB制限）</h2>
           </div>
           
           <div 
@@ -232,12 +323,12 @@ const ReverseMode = ({ onBack }) => {
             ) : (
               <div className="upload-placeholder">
                 <FiUpload className="upload-icon" />
-                <h3>最適化処理対応モアレ画像をアップロード</h3>
-                <p>隠し画像が埋め込まれたモアレ画像を選択 - 自動最適化で超高速処理</p>
-                <div className="upload-features">
-                  <div className="feature-badge">⚡ 3-10倍高速化</div>
-                  <div className="feature-badge">💾 50%メモリ削減</div>
-                  <div className="feature-badge">🔧 CPU負荷軽減</div>
+                <h3>512MB制限対応モアレ画像をアップロード</h3>
+                <p>隠し画像が埋め込まれたモアレ画像を選択（3MB以下）</p>
+                <div className="upload-constraints">
+                  <div className="constraint-item">📏 推奨サイズ: 800×600px以下</div>
+                  <div className="constraint-item">💾 制限: 3MB以下（1.5MB推奨）</div>
+                  <div className="constraint-item">⚡ 超軽量処理で高速実行</div>
                 </div>
               </div>
             )}
@@ -249,27 +340,30 @@ const ReverseMode = ({ onBack }) => {
           <div className="reverse-step">
             <div className="step-header">
               <div className="step-number">2</div>
-              <h2>抽出設定（最適化パラメータ）</h2>
+              <h2>抽出設定（512MB最適化）</h2>
             </div>
-            
-            {methodInfo}
             
             <div className="settings-grid">
               <div className="setting-group">
-                <label>抽出方法（全て最適化済み）</label>
+                <label>抽出方法（メモリ効率順）</label>
                 <select
                   value={settings.extractionMethod}
                   onChange={(e) => handleSettingChange('extractionMethod', e.target.value)}
                 >
                   {availableMethods?.extraction_methods && Object.entries(availableMethods.extraction_methods).map(([key, method]) => (
-                    <option key={key} value={key}>{method.name}</option>
+                    <option key={key} value={key}>
+                      {method.name} {method.render_512mb_safe === true ? '🟢' : method.render_512mb_safe === 'small images only' ? '🟡' : '🔴'}
+                    </option>
                   ))}
                 </select>
-                {availableMethods?.extraction_methods?.[settings.extractionMethod] && (
-                  <small className="method-description">
-                    {availableMethods.extraction_methods[settings.extractionMethod].description}
-                  </small>
-                )}
+                <div className="method-safety">
+                  {availableMethods?.extraction_methods?.[settings.extractionMethod]?.render_512mb_safe === true && 
+                    <span className="safety-badge safe">✅ 512MB環境で安全</span>
+                  }
+                  {availableMethods?.extraction_methods?.[settings.extractionMethod]?.render_512mb_safe === 'small images only' && 
+                    <span className="safety-badge warning">⚠️ 小画像のみ推奨</span>
+                  }
+                </div>
               </div>
 
               <div className="setting-group">
@@ -277,15 +371,15 @@ const ReverseMode = ({ onBack }) => {
                 <input
                   type="range"
                   min="0.5"
-                  max="5.0"
+                  max="3.0"
                   step="0.1"
                   value={settings.enhancementLevel}
                   onChange={(e) => handleSettingChange('enhancementLevel', parseFloat(e.target.value))}
                   className="range-slider"
                 />
                 <div className="range-labels">
-                  <span>控えめ（高速）</span>
-                  <span>強調（詳細）</span>
+                  <span>軽量（推奨）</span>
+                  <span>高品質</span>
                 </div>
               </div>
 
@@ -297,13 +391,16 @@ const ReverseMode = ({ onBack }) => {
                     checked={settings.applyEnhancement}
                     onChange={(e) => handleSettingChange('applyEnhancement', e.target.checked)}
                   />
-                  <label htmlFor="applyEnhancement">画像強調を適用（最適化処理）</label>
+                  <label htmlFor="applyEnhancement">
+                    画像強調を適用 
+                    {settings.applyEnhancement && <span className="memory-impact">⚠️ 追加メモリ使用</span>}
+                  </label>
                 </div>
               </div>
 
               {settings.applyEnhancement && (
                 <div className="setting-group">
-                  <label>強調方法（全て高速化済み）</label>
+                  <label>強調方法（軽量版）</label>
                   <select
                     value={settings.enhancementMethod}
                     onChange={(e) => handleSettingChange('enhancementMethod', e.target.value)}
@@ -312,11 +409,6 @@ const ReverseMode = ({ onBack }) => {
                       <option key={key} value={key}>{method.name}</option>
                     ))}
                   </select>
-                  {availableMethods?.enhancement_methods?.[settings.enhancementMethod] && (
-                    <small className="method-description">
-                      {availableMethods.enhancement_methods[settings.enhancementMethod].description}
-                    </small>
-                  )}
                 </div>
               )}
             </div>
@@ -329,12 +421,13 @@ const ReverseMode = ({ onBack }) => {
               {processing ? (
                 <>
                   <div className="spinner"></div>
-                  最適化処理実行中...
+                  超軽量処理実行中...
                 </>
               ) : (
                 <>
                   <FiEye />
-                  超高速で隠し画像を抽出
+                  <FiZap />
+                  512MB環境で安全に抽出
                 </>
               )}
             </button>
@@ -343,7 +436,7 @@ const ReverseMode = ({ onBack }) => {
 
         {/* エラー表示 */}
         {error && (
-          <div className="error-message">
+          <div className={`error-message ${error.includes('⚠️') ? 'warning' : 'error'}`}>
             <p>{error}</p>
           </div>
         )}
@@ -353,7 +446,7 @@ const ReverseMode = ({ onBack }) => {
           <div className="reverse-step">
             <div className="step-header">
               <div className="step-number">3</div>
-              <h2>抽出結果（最適化処理完了）</h2>
+              <h2>抽出結果（超軽量処理完了）</h2>
             </div>
             
             <div className="result-content">
@@ -372,39 +465,35 @@ const ReverseMode = ({ onBack }) => {
               </div>
               
               <div className="result-info">
-                <h4>最適化処理情報</h4>
+                <h4>超軽量処理情報</h4>
                 <div className="info-grid">
                   <div className="info-item">
-                    <span className="info-label">抽出方法:</span>
-                    <span className="info-value">{availableMethods?.extraction_methods?.[result.processing_info.extraction_method]?.name || result.processing_info.extraction_method}</span>
+                    <span className="info-label">処理方法:</span>
+                    <span className="info-value">{availableMethods?.extraction_methods?.[result.processing_info.extraction_method]?.name}</span>
                   </div>
                   <div className="info-item">
-                    <span className="info-label">強調レベル:</span>
-                    <span className="info-value">{result.processing_info.enhancement_level}</span>
-                  </div>
-                  <div className="info-item">
-                    <span className="info-label">画像サイズ:</span>
-                    <span className="info-value">{result.processing_info.result_size}</span>
+                    <span className="info-label">処理時間:</span>
+                    <span className="info-value">{processingTime}ms</span>
                   </div>
                   <div className="info-item">
                     <span className="info-label">ファイルサイズ:</span>
                     <span className="info-value">{Math.round(result.processing_info.file_size / 1024)} KB</span>
                   </div>
-                  {processingTime > 0 && (
+                  {result.processing_info.memory_optimization && (
                     <div className="info-item">
-                      <span className="info-label">処理時間:</span>
-                      <span className="info-value">{processingTime}ms</span>
+                      <span className="info-label">メモリ節約:</span>
+                      <span className="info-value">{result.processing_info.memory_optimization.memory_saved_mb}MB</span>
                     </div>
                   )}
                 </div>
                 
-                {result.processing_info.optimization_applied && (
-                  <div className="optimization-results">
-                    <h5>🚀 最適化効果</h5>
+                {result.processing_info.memory_optimization && (
+                  <div className="memory-optimization-info">
+                    <h5>🚀 512MB最適化効果</h5>
                     <div className="optimization-badges">
-                      <div className="opt-badge">⚡ 処理速度: {result.processing_info.optimization_applied.processing_speed}</div>
-                      <div className="opt-badge">💾 メモリ: {result.processing_info.optimization_applied.memory_usage}</div>
-                      <div className="opt-badge">🔧 CPU効率化済み</div>
+                      <div className="opt-badge">⚡ 超軽量処理</div>
+                      <div className="opt-badge">💾 メモリ効率化</div>
+                      <div className="opt-badge">🔧 Render対応</div>
                     </div>
                   </div>
                 )}
