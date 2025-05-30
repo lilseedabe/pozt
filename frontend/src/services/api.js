@@ -247,19 +247,6 @@ export const checkOptimizationStatus = (params) => {
   return optimizationStatus;
 };
 
-const apiService = {
-  uploadImage,
-  processImage,
-  downloadImage,
-  validateOptimizedParams,
-  measureProcessingPerformance,
-  checkOptimizationStatus
-};
-
-// frontend/src/services/api.js にリバース機能を追加
-
-// 既存のコードの最後に以下を追加：
-
 /**
  * リバース処理: モアレ画像から隠し画像を抽出
  * @param {File} file - モアレ効果画像ファイル
@@ -507,7 +494,7 @@ export const evaluateReverseQuality = (result) => {
   return qualityMetrics;
 };
 
-// 既存のデフォルトエクスポートに新しい関数を追加
+// 統一されたデフォルトエクスポート（重複なし）
 const apiService = {
   uploadImage,
   processImage,
