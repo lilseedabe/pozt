@@ -693,3 +693,306 @@
     transform: scale(0.98);
   }
 }
+
+/* パフォーマンス向上UI追加スタイル - ReverseMode styles.cssに追加 */
+
+/* パフォーマンス情報表示 */
+.performance-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-primary);
+  margin-bottom: var(--space-xl);
+  animation: slideUp 0.5s ease-out;
+}
+
+.performance-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.performance-badge.success {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: var(--accent-success);
+  color: var(--accent-success);
+}
+
+.performance-badge:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+  border-color: var(--accent-primary);
+}
+
+.perf-icon {
+  color: var(--accent-primary);
+  font-size: 1.1rem;
+}
+
+/* パフォーマンス指標 */
+.performance-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  min-width: 120px;
+}
+
+.perf-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.perf-item small {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-bottom: var(--space-xs);
+}
+
+.perf-item strong {
+  color: var(--accent-primary);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* メソッド情報表示 */
+.method-info {
+  background: var(--bg-tertiary);
+  padding: var(--space-lg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  margin-bottom: var(--space-lg);
+}
+
+.method-details {
+  margin-bottom: var(--space-md);
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.method-performance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.perf-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-primary);
+}
+
+/* アップロード機能追加 */
+.upload-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+  justify-content: center;
+}
+
+.feature-badge {
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  color: var(--accent-primary);
+  border: 1px solid var(--border-accent);
+  font-weight: 500;
+}
+
+/* 最適化結果表示 */
+.optimization-results {
+  margin-top: var(--space-lg);
+  padding: var(--space-lg);
+  background: rgba(16, 185, 129, 0.05);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.optimization-results h5 {
+  color: var(--accent-success);
+  margin-bottom: var(--space-md);
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.optimization-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.opt-badge {
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: var(--radius-sm);
+  color: var(--accent-success);
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  transition: all var(--transition-fast);
+}
+
+.opt-badge:hover {
+  background: rgba(16, 185, 129, 0.15);
+  transform: translateY(-1px);
+}
+
+/* CPU・メモリ使用率アニメーション */
+@keyframes cpuPulse {
+  0%, 100% {
+    background-color: var(--bg-tertiary);
+  }
+  50% {
+    background-color: rgba(0, 212, 255, 0.1);
+  }
+}
+
+.performance-badge.cpu-optimized {
+  animation: cpuPulse 3s ease-in-out infinite;
+}
+
+/* 処理時間表示の強調 */
+.processing-time-display {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--gradient-primary);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.95rem;
+  box-shadow: var(--shadow-sm);
+  animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 高速処理インジケーター */
+.speed-indicator {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.speed-indicator::before {
+  content: '⚡';
+  animation: flash 1s ease-in-out infinite;
+}
+
+@keyframes flash {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* メモリ効率表示 */
+.memory-efficiency {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: var(--radius-sm);
+  color: var(--accent-secondary);
+  font-size: 0.85rem;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+/* 処理完了アニメーション */
+.processing-complete {
+  animation: completePulse 0.6s ease-out;
+}
+
+@keyframes completePulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+  .performance-info {
+    flex-direction: column;
+  }
+  
+  .method-performance {
+    justify-content: center;
+  }
+  
+  .optimization-badges {
+    justify-content: center;
+  }
+  
+  .upload-features {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .performance-badge {
+    flex: 1;
+    justify-content: center;
+    min-width: 0;
+  }
+  
+  .feature-badge {
+    text-align: center;
+    flex: 1;
+  }
+  
+  .opt-badge {
+    text-align: center;
+    flex: 1;
+  }
+}
