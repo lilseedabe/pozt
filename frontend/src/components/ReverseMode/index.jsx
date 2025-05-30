@@ -1,7 +1,7 @@
 // frontend/src/components/ReverseMode/index.jsx
 import React, { useState, useRef } from 'react';
 import axios from 'axios';
-import { FiUpload, FiImage, FiEye, FiSettings, FiDownload, FiArrowLeft } from 'react-icons/fi';
+import { FiUpload, FiImage, FiEye, FiDownload, FiArrowLeft } from 'react-icons/fi';
 import './styles.css';
 
 const ReverseMode = ({ onBack }) => {
