@@ -6,17 +6,27 @@ from fastapi.responses import FileResponse, HTMLResponse, Response, RedirectResp
 from api.routes import image, health
 from config.app import get_settings
 
+# アクセス制御ミドルウェアをインポート
+from middleware.access_control import AccessControlMiddleware
+
 app = FastAPI(
     title="pozt API",
     description="Pattern Optical Zone Technology",
     version="1.0.0"
 )
 
+# アクセス制御ミドルウェアを追加（最初に追加することが重要）
+app.add_middleware(
+    AccessControlMiddleware,
+    allowed_origin="pozt.iodo.co.jp",  # 許可するドメイン
+    session_timeout=1800  # 30分 = 1800秒
+)
+
 # CORS設定
 settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=["https://pozt.iodo.co.jp", "http://pozt.iodo.co.jp"],  # 特定のオリジンのみ許可
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,6 +53,21 @@ if os.path.isdir(REACT_STATIC_DIR):
 
 # アップロードされた画像ファイルの提供 - より高い優先度で設定
 app.mount("/uploads", StaticFiles(directory=UPLOAD_STATIC_DIR), name="upload_static")
+
+# セッション状態確認エンドポイント（デバッグ用）
+@app.get("/api/session-status")
+async def session_status(request: Request):
+    """現在のセッション状態を確認するエンドポイント"""
+    session_remaining = request.headers.get("X-Session-Remaining", "Unknown")
+    session_id = request.headers.get("X-Session-ID", "Unknown")
+    
+    return {
+        "session_id": session_id,
+        "remaining_seconds": session_remaining,
+        "remaining_minutes": int(session_remaining) // 60 if session_remaining.isdigit() else "Unknown",
+        "access_origin": request.headers.get("origin", "Unknown"),
+        "referrer": request.headers.get("referer", "Unknown")
+    }
 
 # ルート("/"): React の index.html
 @app.get("/", response_class=HTMLResponse)
