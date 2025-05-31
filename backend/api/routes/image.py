@@ -10,7 +10,7 @@ import io
 from api.dependencies import validate_file_size, get_api_settings
 from config.app import Settings
 from utils.file_handler import save_upload_file, get_file_path, delete_old_files
-from utils.image_processor import process_hidden_image
+from utils.optimized_processor import process_hidden_image_optimized
 
 router = APIRouter()
 
@@ -70,6 +70,9 @@ async def process_image(
     # 縞模様の色パラメータを追加
     stripe_color1: str = Form("#000000"),         # 縞色1（デフォルト黒）
     stripe_color2: str = Form("#ffffff"),         # 縞色2（デフォルト白）
+    # 形状パラメータを追加
+    shape_type: str = Form("rectangle"),          # 形状タイプ（rectangle, circle, star, heart, japanese, arabesque）
+    shape_params: str = Form("{}"),               # 形状パラメータ（JSON文字列）
     settings: Settings = Depends(get_api_settings)
 ):
     """画像を処理してモアレ効果を適用（最適化パラメータ拡張版）"""
@@ -174,8 +177,8 @@ async def process_image(
         
         print(f"📊 Optimized processing parameters: {processing_params}")
         
-        # 画像処理の実行
-        result_files = process_hidden_image(
+        # メモリ最適化版の画像処理を実行
+        result_files = process_hidden_image_optimized(
             file_path,
             region,
             pattern_type,
@@ -185,8 +188,10 @@ async def process_image(
             border_width,
             overlay_ratio,
             processing_params,  # 最適化パラメータを渡す
-            stripe_color1,      # 縞色1を追加
-            stripe_color2       # 縞色2を追加
+            stripe_color1,      # 縞色1
+            stripe_color2,      # 縞色2
+            shape_type,         # 形状タイプ
+            shape_params        # 形状パラメータ（JSON文字列）
         )
         
         print(f"✅ Optimized processing completed. Result: {result_files}")
@@ -272,4 +277,3 @@ async def download_image(filename: str):
         media_type="image/png",
         filename=f"pozt_{filename}"
     )
-
