@@ -67,6 +67,9 @@ async def process_image(
     contrast_boost: float = Form(1.0),
     color_shift: float = Form(0.0),
     sharpness_boost: float = Form(0.0),           # 新しいパラメータを追加
+    # 縞模様の色パラメータを追加
+    stripe_color1: str = Form("#000000"),         # 縞色1（デフォルト黒）
+    stripe_color2: str = Form("#ffffff"),         # 縞色2（デフォルト白）
     settings: Settings = Depends(get_api_settings)
 ):
     """画像を処理してモアレ効果を適用（最適化パラメータ拡張版）"""
@@ -89,6 +92,8 @@ async def process_image(
         print(f"  contrast_boost: {contrast_boost}")
         print(f"  color_shift: {color_shift}")
         print(f"  sharpness_boost: {sharpness_boost} (new parameter)")
+        print(f"  stripe_color1: {stripe_color1}")
+        print(f"  stripe_color2: {stripe_color2}")
         
         # ファイルパスの取得と確認
         file_path = get_file_path(filename)
@@ -162,7 +167,9 @@ async def process_image(
             'contrast_boost': contrast_boost,
             'color_shift': color_shift,
             'overlay_ratio': overlay_ratio,
-            'sharpness_boost': sharpness_boost  # 新しいパラメータを追加
+            'sharpness_boost': sharpness_boost,  # 新しいパラメータを追加
+            'stripe_color1': stripe_color1,      # 縞色1を追加
+            'stripe_color2': stripe_color2       # 縞色2を追加
         }
         
         print(f"📊 Optimized processing parameters: {processing_params}")
@@ -177,7 +184,9 @@ async def process_image(
             add_border_bool,
             border_width,
             overlay_ratio,
-            processing_params  # 最適化パラメータを渡す
+            processing_params,  # 最適化パラメータを渡す
+            stripe_color1,      # 縞色1を追加
+            stripe_color2       # 縞色2を追加
         )
         
         print(f"✅ Optimized processing completed. Result: {result_files}")
@@ -263,3 +272,4 @@ async def download_image(filename: str):
         media_type="image/png",
         filename=f"pozt_{filename}"
     )
+
