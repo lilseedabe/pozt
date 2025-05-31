@@ -4,11 +4,17 @@ import numpy as np
 import cv2
 from core.image_utils import ensure_array, get_grayscale
 
-def create_overlay_moire_pattern(hidden_img, pattern_type="horizontal", overlay_opacity=0.6):
+def create_overlay_moire_pattern(hidden_img, pattern_type="horizontal", overlay_opacity=0.6, color1="#000000", color2="#FFFFFF"):
     """
-    重ね合わせモード：完全ベクトル化による超高速化
+    重ね合わせモード：完全ベクトル化による超高速化（カラー対応）
     従来のピクセル単位ループを排除し、10-20倍高速化を実現
     """
+    from .base import hex_to_rgb
+    
+    # HEX色をRGBに変換
+    color1_rgb = hex_to_rgb(color1)
+    color2_rgb = hex_to_rgb(color2)
+    
     if isinstance(hidden_img, np.ndarray):
         hidden_array = hidden_img.astype(np.float32)
     else:
@@ -38,21 +44,27 @@ def create_overlay_moire_pattern(hidden_img, pattern_type="horizontal", overlay_
     if pattern_type == "horizontal":
         # 行ベースの縞パターン生成（メモリ効率的）
         y_coords = np.arange(height, dtype=np.uint8).reshape(-1, 1)
-        stripe_values = (y_coords % 2) * 255  # 0または255
-        
-        # 全幅にブロードキャスト（効率的）
-        stripes_single = np.broadcast_to(stripe_values, (height, width))
+        stripe_pattern = (y_coords % 2)  # 0または1
+        stripe_pattern = np.broadcast_to(stripe_pattern, (height, width))
         
     else:  # vertical
         # 列ベースの縞パターン生成（メモリ効率的）
         x_coords = np.arange(width, dtype=np.uint8).reshape(1, -1)
-        stripe_values = (x_coords % 2) * 255  # 0または255
-        
-        # 全高にブロードキャスト（効率的）
-        stripes_single = np.broadcast_to(stripe_values, (height, width))
+        stripe_pattern = (x_coords % 2)  # 0または1
+        stripe_pattern = np.broadcast_to(stripe_pattern, (height, width))
     
-    # RGB縞パターン生成（ブロードキャスト活用）
-    stripes = np.stack([stripes_single, stripes_single, stripes_single], axis=2)
+    # カスタム色で縞パターン生成
+    stripes = np.zeros((height, width, 3), dtype=np.float32)
+    
+    # 暗い縞の領域にcolor1を適用
+    dark_regions = stripe_pattern == 0
+    for i in range(3):
+        stripes[dark_regions, i] = color1_rgb[i]
+    
+    # 明るい縞の領域にcolor2を適用
+    light_regions = stripe_pattern == 1
+    for i in range(3):
+        stripes[light_regions, i] = color2_rgb[i]
     
     # **完全ベクトル化による合成処理**
     # 均一グレー値（ベクトル化）
@@ -64,7 +76,7 @@ def create_overlay_moire_pattern(hidden_img, pattern_type="horizontal", overlay_
     
     # 最終合成（完全ベクトル化）
     # mask値が大きいほどグレー、小さいほど縞模様
-    result = stripes.astype(np.float32) * (1.0 - mask_3d) + gray * mask_3d
+    result = stripes * (1.0 - mask_3d) + gray * mask_3d
     
     return result.astype(np.uint8)
 
