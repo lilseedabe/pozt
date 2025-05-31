@@ -2,9 +2,6 @@
 最適化された画像処理モジュール - メモリ使用量最適化版
 形状マスク・カラー設定に対応し、512MB環境でも安定動作
 """
-
-# 後方互換性のためのエイリアス
-process_hidden_image_optimized = None  # この関数は使用されていません
 import numpy as np
 import cv2
 from PIL import Image, ImageFilter, ImageEnhance
@@ -17,7 +14,7 @@ import psutil
 from concurrent.futures import ThreadPoolExecutor
 from utils.image_processor import (
     optimize_image_for_processing, 
-    vectorized_pattern_generation, 
+    vectorized_pattern_generation,
     clear_memory
 )
 from config.app import get_settings
@@ -110,9 +107,20 @@ def process_hidden_image_optimized(
             raise FileNotFoundError(f"Base image not found: {base_img_path}")
 
         # メモリ効率の良い読み込み
-        with Image.open(base_img_path) as base_img:
-            original_size = (base_img.width, base_img.height)
-            print(f"Original size: {original_size}")
+        base_img_orig = Image.open(base_img_path)
+        original_size = (base_img_orig.width, base_img_orig.height)
+        print(f"Original size: {original_size}, mode: {base_img_orig.mode}")
+        
+        # RGBAの場合はRGBに変換
+        if base_img_orig.mode == 'RGBA':
+            base_img = Image.new('RGB', base_img_orig.size, (255, 255, 255))
+            base_img.paste(base_img_orig, mask=base_img_orig.split()[3])
+            base_img_orig.close()
+            print(f"Converted base image from RGBA to RGB")
+        else:
+            base_img = base_img_orig
+        
+        try:
             
             # 大きな画像は事前リサイズ
             if base_img.width * base_img.height > 4000000:  # 4MP以上は大きい
@@ -127,18 +135,30 @@ def process_hidden_image_optimized(
             height = min(height, base_img.height - y)
             
             region_pil = base_img.crop((x, y, x + width, y + height))
-            print(f"Region extracted: {region_pil.size}")
+            print(f"Region extracted: {region_pil.size}, mode: {region_pil.mode}")
+            
+            # RGBAをRGBに変換
+            if region_pil.mode == 'RGBA':
+                rgb_pil = Image.new('RGB', region_pil.size, (255, 255, 255))
+                rgb_pil.paste(region_pil, mask=region_pil.split()[3])
+                region_pil = rgb_pil
+                print(f"Converted region from RGBA to RGB")
 
             # 高速リサイズ処理
             base_fixed = resize_to_fixed_size(base_img, method=resize_method)
 
-        # メモリ効率のためにNumPy配列に変換
-        hidden_img = np.array(region_pil)
-        base_fixed_array = np.array(base_fixed)
-        
-        # PILオブジェクトを解放
-        del region_pil, base_fixed
-        clear_memory()
+            # メモリ効率のためにNumPy配列に変換
+            hidden_img = np.array(region_pil)
+            base_fixed_array = np.array(base_fixed)
+            
+            # PILオブジェクトを解放
+            del region_pil, base_fixed
+            clear_memory()
+            
+        finally:
+            # base_imgを確実にclose
+            if 'base_img' in locals():
+                base_img.close()
 
         phase_time = time.time() - phase_start
         print(f"⚡ Phase 1 (Image loading): {phase_time:.2f}s")
@@ -188,6 +208,14 @@ def process_hidden_image_optimized(
         # リサイズ
         hidden_pil = Image.fromarray(hidden_img)
         hidden_resized = hidden_pil.resize((width_fixed, height_fixed), Image.Resampling.BILINEAR)
+        
+        # RGBAの場合はRGBに変換
+        if hidden_resized.mode == 'RGBA':
+            rgb_hidden = Image.new('RGB', hidden_resized.size, (255, 255, 255))
+            rgb_hidden.paste(hidden_resized, mask=hidden_resized.split()[3])
+            hidden_resized = rgb_hidden
+            print(f"Converted hidden_resized from RGBA to RGB")
+        
         hidden_array = np.array(hidden_resized)
         
         # 不要オブジェクト解放
@@ -210,7 +238,14 @@ def process_hidden_image_optimized(
             
             # 形状パラメータの解析（JSON文字列から辞書へ）
             try:
-                shape_params_dict = json.loads(shape_params) if isinstance(shape_params, str) else {}
+                if isinstance(shape_params, str):
+                    # 空文字列または空白文字列の場合はデフォルト
+                    if not shape_params.strip():
+                        shape_params_dict = {}
+                    else:
+                        shape_params_dict = json.loads(shape_params)
+                else:
+                    shape_params_dict = shape_params if shape_params else {}
             except Exception as e:
                 print(f"⚠️ Error parsing shape params: {e}")
                 shape_params_dict = {}
@@ -253,10 +288,16 @@ def process_hidden_image_optimized(
             
             # 隠し画像に適用
             if len(hidden_array.shape) == 3:  # カラー画像
-                mask_3d = np.stack([shape_mask, shape_mask, shape_mask], axis=2) / 255.0
-                hidden_array = (hidden_array * mask_3d).astype(np.uint8)
-                # メモリ最適化: マスクを解放
-                del mask_3d
+                # RGB画像のみを処理（RGBAは既に変換済みのはず）
+                if hidden_array.shape[2] == 3:
+                    mask_3d = np.stack([shape_mask, shape_mask, shape_mask], axis=2) / 255.0
+                    hidden_array = (hidden_array * mask_3d).astype(np.uint8)
+                    # メモリ最適化: マスクを解放
+                    del mask_3d
+                else:
+                    # 万が一RGBAならRGBに変換
+                    print(f"⚠️ Unexpected RGBA in shape mask application: {hidden_array.shape}")
+                    hidden_array = hidden_array[:, :, :3]
             else:
                 hidden_array = (hidden_array * (shape_mask / 255.0)).astype(np.uint8)
             
@@ -275,6 +316,13 @@ def process_hidden_image_optimized(
         stripe_pattern = vectorized_pattern_generation(
             hidden_array, pattern_type, stripe_method, processing_params
         )
+        
+        # パターンがRGBAの場合はRGBに変換
+        if len(stripe_pattern.shape) == 3 and stripe_pattern.shape[2] == 4:
+            print(f"⚠️ Stripe pattern is RGBA: {stripe_pattern.shape}, converting to RGB")
+            stripe_pattern = stripe_pattern[:, :, :3]
+        
+        print(f"Stripe pattern shape: {stripe_pattern.shape}")
         
         # 不要メモリ解放
         del hidden_array
@@ -299,6 +347,14 @@ def process_hidden_image_optimized(
         phase_start = time.time()
         
         # 結果画像の作成
+        # base_fixed_arrayがRGBAの場合はRGBに変換
+        if len(base_fixed_array.shape) == 3 and base_fixed_array.shape[2] == 4:
+            print(f"⚠️ Base fixed array is RGBA: {base_fixed_array.shape}, converting to RGB")
+            base_fixed_array = base_fixed_array[:, :, :3]
+        
+        print(f"Base fixed array shape: {base_fixed_array.shape}")
+        print(f"Stripe pattern shape for replacement: {stripe_pattern.shape}")
+        
         result_fixed = base_fixed_array.copy()
         
         # 領域置換
