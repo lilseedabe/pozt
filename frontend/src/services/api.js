@@ -51,6 +51,10 @@ export const processImage = async (params) => {
       else if (typeof value === 'number') {
         value = value.toString();
       }
+      // オブジェクト値（形状パラメータなど）をJSON文字列に変換
+      else if (typeof value === 'object' && value !== null) {
+        value = JSON.stringify(value);
+      }
 
       formData.append(key, value);
     });
@@ -66,7 +70,9 @@ export const processImage = async (params) => {
       'blur_radius',
       'contrast_boost',
       'color_shift',
-      'sharpness_boost'  // 新しいパラメータを追加
+      'sharpness_boost',  // 新しいパラメータを追加
+      'shape_type',       // 形状タイプパラメータ
+      'shape_params'      // 形状パラメータ
     ];
     const used = optimizedParams.filter((p) => formData.has(p));
     if (used.length > 0) {
