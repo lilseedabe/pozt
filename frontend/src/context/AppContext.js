@@ -20,7 +20,17 @@ const initialState = {
     blurRadius: 0,          // 5 → 0 に変更（最適化）
     contrastBoost: 1.0,
     colorShift: 0.0,
-    sharpnessBoost: 0.0     // 新しいパラメータを追加
+    sharpnessBoost: 0.0,    // 新しいパラメータを追加
+    // 形状選択パラメータ
+    shapeType: 'rectangle', // デフォルトは四角形
+    shapeParams: {          // 形状固有のパラメータ
+      size: 0.8,           // 基本サイズ（0.1-1.0）
+      rotation: 0,         // 回転角度（0-360度）
+      points: 5,           // 星形の頂点数（3-12）
+      innerRadius: 0.5,    // 星形の内径比（0.1-0.9）
+      complexity: 0.5,     // アラベスク/和柄の複雑度（0.1-1.0）
+      pattern: 'sakura'    // 和柄パターン（sakura/seigaiha/asanoha/kumiko）
+    }
   },
   processingStatus: 'idle', // idle, processing, success, error
   result: null,
