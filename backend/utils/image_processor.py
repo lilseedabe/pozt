@@ -64,6 +64,10 @@ def vectorized_pattern_generation(hidden_array, pattern_type, stripe_method, pro
     完全ベクトル化によるパターン生成（超高速版 + 最適化パラメータ対応）
     従来のループ処理を排除し、並列ベクトル演算により10-50倍高速化
     """
+    # 入力画像がRGBAの場合はRGBに変換
+    if len(hidden_array.shape) == 3 and hidden_array.shape[2] == 4:
+        print(f"⚠️ Hidden array is RGBA in vectorized_pattern_generation: {hidden_array.shape}, converting to RGB")
+        hidden_array = hidden_array[:, :, :3]
     # 最適化されたデフォルトパラメータ設定
     if processing_params is None:
         processing_params = {
@@ -1143,6 +1147,14 @@ def process_hidden_image(
         # **PIL高速リサイズ**
         hidden_pil = Image.fromarray(hidden_img.astype('uint8'))
         hidden_resized = hidden_pil.resize((width_fixed, height_fixed), Image.Resampling.BILINEAR)
+        
+        # RGBAの場合はRGBに変換
+        if hidden_resized.mode == 'RGBA':
+            rgb_hidden = Image.new('RGB', hidden_resized.size, (255, 255, 255))
+            rgb_hidden.paste(hidden_resized, mask=hidden_resized.split()[3])
+            hidden_resized = rgb_hidden
+            print(f"Converted hidden_resized from RGBA to RGB")
+        
         hidden_array = optimize_image_for_processing(np.array(hidden_resized))
         
         print(f"Hidden array optimized: {hidden_array.shape}")
@@ -1163,7 +1175,11 @@ def process_hidden_image(
             # 形状パラメータの準備（JSON文字列から辞書へ）
             try:
                 if isinstance(shape_params, str):
-                    shape_params_dict = json.loads(shape_params) if shape_params else {}
+                    # 空文字列または空白文字列の場合はデフォルト
+                    if not shape_params.strip():
+                        shape_params_dict = {}
+                    else:
+                        shape_params_dict = json.loads(shape_params)
                 else:
                     shape_params_dict = shape_params or {}
             except json.JSONDecodeError as e:
@@ -1190,6 +1206,11 @@ def process_hidden_image(
             hidden_array, pattern_type, stripe_method, processing_params
         )
         
+        # パターンがRGBAの場合はRGBに変換
+        if len(stripe_pattern.shape) == 3 and stripe_pattern.shape[2] == 4:
+            print(f"⚠️ Stripe pattern is RGBA: {stripe_pattern.shape}, converting to RGB")
+            stripe_pattern = stripe_pattern[:, :, :3]
+        
         print(f"Optimized vectorized pattern generated: {stripe_pattern.shape}")
         
         del hidden_array
@@ -1202,6 +1223,14 @@ def process_hidden_image(
         phase_start = time.time()
         
         # **ベクトル化による高速合成**
+        # base_fixed_arrayがRGBAの場合はRGBに変換
+        if len(base_fixed_array.shape) == 3 and base_fixed_array.shape[2] == 4:
+            print(f"⚠️ Base fixed array is RGBA: {base_fixed_array.shape}, converting to RGB")
+            base_fixed_array = base_fixed_array[:, :, :3]
+        
+        print(f"Base fixed array shape: {base_fixed_array.shape}")
+        print(f"Stripe pattern shape for replacement: {stripe_pattern.shape}")
+        
         result_fixed = base_fixed_array.copy()
         
         # 領域置換（ベクトル化）
