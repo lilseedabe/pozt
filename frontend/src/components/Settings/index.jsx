@@ -25,7 +25,10 @@ const Settings = ({ onComplete }) => {
     sharpnessBoost: settings.sharpnessBoost || 0.0,           // 新しいパラメータ
     // 縞模様の色設定を追加
     stripeColor1: settings.stripeColor1 || '#000000',         // 縞色1（デフォルト黒）
-    stripeColor2: settings.stripeColor2 || '#ffffff'          // 縞色2（デフォルト白）
+    stripeColor2: settings.stripeColor2 || '#ffffff',         // 縞色2（デフォルト白）
+    // 形状設定を追加
+    shapeType: settings.shapeType || 'rectangle',            // 形状タイプ
+    shapeParams: settings.shapeParams || {}                  // 形状パラメータ
   });
   
   const [isProcessing, setIsProcessing] = useState(false);
@@ -142,9 +145,9 @@ const Settings = ({ onComplete }) => {
         // 縞模様の色パラメータを追加
         stripe_color1: localSettings.stripeColor1,
         stripe_color2: localSettings.stripeColor2,
-        // 形状選択パラメータを追加
-        shape_type: localSettings.shapeType,
-        shape_params: localSettings.shapeParams
+        // 形状選択パラメータを追加（JSON文字列化）
+        shape_type: localSettings.shapeType || 'rectangle',
+        shape_params: JSON.stringify(localSettings.shapeParams || {})
       };
       
       console.log('⚡ Sending enhanced high-speed API request:', params);
@@ -468,6 +471,194 @@ const Settings = ({ onComplete }) => {
               💡 縞模様の色を自由に変更できます。HEX形式（#000000）での直接入力も可能です。
             </small>
           </div>
+        </div>
+
+        {/* 形状選択設定を追加 */}
+        <div className="settings-group">
+          <h3>🎭 隠し画像の形状設定</h3>
+          
+          <div className="form-control">
+            <label htmlFor="shapeType">マスク形状</label>
+            <select
+              id="shapeType"
+              name="shapeType"
+              value={localSettings.shapeType}
+              onChange={handleChange}
+              disabled={isProcessing}
+            >
+              <option value="rectangle">📦 四角形（標準・高速）</option>
+              <option value="circle">⭕ 円形</option>
+              <option value="star">⭐ 星形</option>
+              <option value="heart">💖 ハート形</option>
+              <option value="japanese">🌸 和柄模様</option>
+              <option value="arabesque">🌿 アラベスク模様</option>
+            </select>
+            <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+              📦=最高速 ⭕⭐💖=高速 🌸🌿=高品質だが処理時間増
+            </small>
+          </div>
+
+          {/* 形状別パラメータ */}
+          {localSettings.shapeType !== 'rectangle' && (
+            <div className="parameter-section" style={{ marginTop: '20px' }}>
+              <h4>🔧 形状詳細設定</h4>
+              
+              {/* 基本サイズ設定（全形状共通） */}
+              <div className="form-control">
+                <label htmlFor="shapeSize">サイズ: {(localSettings.shapeParams.size || 0.8).toFixed(2)}</label>
+                <input
+                  type="range"
+                  id="shapeSize"
+                  name="shapeSize"
+                  min="0.1"
+                  max="1.0"
+                  step="0.05"
+                  value={localSettings.shapeParams.size || 0.8}
+                  onChange={(e) => {
+                    const newShapeParams = { ...localSettings.shapeParams, size: parseFloat(e.target.value) };
+                    setLocalSettings({ ...localSettings, shapeParams: newShapeParams });
+                  }}
+                  disabled={isProcessing}
+                />
+                <div className="range-labels">
+                  <span>小</span>
+                  <span>大</span>
+                </div>
+              </div>
+
+              {/* 回転設定（全形状共通） */}
+              <div className="form-control">
+                <label htmlFor="shapeRotation">回転: {localSettings.shapeParams.rotation || 0}°</label>
+                <input
+                  type="range"
+                  id="shapeRotation"
+                  name="shapeRotation"
+                  min="0"
+                  max="360"
+                  step="15"
+                  value={localSettings.shapeParams.rotation || 0}
+                  onChange={(e) => {
+                    const newShapeParams = { ...localSettings.shapeParams, rotation: parseInt(e.target.value) };
+                    setLocalSettings({ ...localSettings, shapeParams: newShapeParams });
+                  }}
+                  disabled={isProcessing}
+                />
+                <div className="range-labels">
+                  <span>0°</span>
+                  <span>360°</span>
+                </div>
+              </div>
+
+              {/* 星形専用パラメータ */}
+              {localSettings.shapeType === 'star' && (
+                <>
+                  <div className="form-control">
+                    <label htmlFor="starPoints">頂点数: {localSettings.shapeParams.points || 5}</label>
+                    <input
+                      type="range"
+                      id="starPoints"
+                      name="starPoints"
+                      min="3"
+                      max="12"
+                      step="1"
+                      value={localSettings.shapeParams.points || 5}
+                      onChange={(e) => {
+                        const newShapeParams = { ...localSettings.shapeParams, points: parseInt(e.target.value) };
+                        setLocalSettings({ ...localSettings, shapeParams: newShapeParams });
+                      }}
+                      disabled={isProcessing}
+                    />
+                    <div className="range-labels">
+                      <span>3</span>
+                      <span>12</span>
+                    </div>
+                  </div>
+
+                  <div className="form-control">
+                    <label htmlFor="starInnerRadius">内径比: {(localSettings.shapeParams.innerRadius || 0.5).toFixed(2)}</label>
+                    <input
+                      type="range"
+                      id="starInnerRadius"
+                      name="starInnerRadius"
+                      min="0.1"
+                      max="0.9"
+                      step="0.05"
+                      value={localSettings.shapeParams.innerRadius || 0.5}
+                      onChange={(e) => {
+                        const newShapeParams = { ...localSettings.shapeParams, innerRadius: parseFloat(e.target.value) };
+                        setLocalSettings({ ...localSettings, shapeParams: newShapeParams });
+                      }}
+                      disabled={isProcessing}
+                    />
+                    <div className="range-labels">
+                      <span>尖り</span>
+                      <span>丸み</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* 和柄・アラベスク専用パラメータ */}
+              {(localSettings.shapeType === 'japanese' || localSettings.shapeType === 'arabesque') && (
+                <>
+                  <div className="form-control">
+                    <label htmlFor="patternComplexity">複雑度: {(localSettings.shapeParams.complexity || 0.5).toFixed(2)}</label>
+                    <input
+                      type="range"
+                      id="patternComplexity"
+                      name="patternComplexity"
+                      min="0.1"
+                      max="1.0"
+                      step="0.1"
+                      value={localSettings.shapeParams.complexity || 0.5}
+                      onChange={(e) => {
+                        const newShapeParams = { ...localSettings.shapeParams, complexity: parseFloat(e.target.value) };
+                        setLocalSettings({ ...localSettings, shapeParams: newShapeParams });
+                      }}
+                      disabled={isProcessing}
+                    />
+                    <div className="range-labels">
+                      <span>シンプル</span>
+                      <span>複雑</span>
+                    </div>
+                    <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                      ⚠️ 複雑度が高いほど処理時間が増加します
+                    </small>
+                  </div>
+
+                  {localSettings.shapeType === 'japanese' && (
+                    <div className="form-control">
+                      <label htmlFor="japanesePattern">和柄パターン</label>
+                      <select
+                        id="japanesePattern"
+                        name="japanesePattern"
+                        value={localSettings.shapeParams.pattern || 'sakura'}
+                        onChange={(e) => {
+                          const newShapeParams = { ...localSettings.shapeParams, pattern: e.target.value };
+                          setLocalSettings({ ...localSettings, shapeParams: newShapeParams });
+                        }}
+                        disabled={isProcessing}
+                      >
+                        <option value="sakura">🌸 桜模様</option>
+                        <option value="seigaiha">🌊 青海波</option>
+                        <option value="asanoha">🍃 麻の葉</option>
+                        <option value="kumiko">⚪ 組子</option>
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          <small style={{
+            color: 'var(--text-muted)',
+            fontSize: '0.8rem',
+            display: 'block',
+            marginTop: '15px'
+          }}>
+            💡 形状を変えることで、隠し画像をより魅力的に表現できます。複雑な形状は処理時間が増加します。
+          </small>
         </div>
 
         {/* モード別専用パラメータ */}
@@ -854,4 +1045,3 @@ const Settings = ({ onComplete }) => {
 };
 
 export default Settings;
-
