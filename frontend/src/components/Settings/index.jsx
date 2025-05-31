@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { processImage } from '../../services/api';
 import './styles.css';
@@ -31,6 +31,30 @@ const Settings = ({ onComplete }) => {
     shapeParams: settings.shapeParams || {}                  // 形状パラメータ
   });
   
+  // AppContextの設定が変更された時にlocalSettingsを同期
+  useEffect(() => {
+    setLocalSettings({
+      patternType: settings.patternType,
+      stripeMethod: settings.stripeMethod,
+      resizeMethod: settings.resizeMethod,
+      addBorder: settings.addBorder,
+      borderWidth: settings.borderWidth,
+      overlayRatio: settings.overlayRatio,
+      strength: settings.strength || 0.02,
+      opacity: settings.opacity || 0.0,
+      enhancementFactor: settings.enhancementFactor || 1.2,
+      frequency: settings.frequency || 1,
+      blurRadius: settings.blurRadius || 0,
+      contrastBoost: settings.contrastBoost || 1.0,
+      colorShift: settings.colorShift || 0.0,
+      sharpnessBoost: settings.sharpnessBoost || 0.0,
+      stripeColor1: settings.stripeColor1 || '#000000',
+      stripeColor2: settings.stripeColor2 || '#ffffff',
+      shapeType: settings.shapeType || 'rectangle',
+      shapeParams: settings.shapeParams || {}
+    });
+  }, [settings]);
+  
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [processingTime, setProcessingTime] = useState(null);
@@ -58,10 +82,18 @@ const Settings = ({ onComplete }) => {
   
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setLocalSettings({
+    const newValue = type === 'checkbox' ? checked : value;
+    const newSettings = {
       ...localSettings,
-      [name]: type === 'checkbox' ? checked : value
-    });
+      [name]: newValue
+    };
+    
+    setLocalSettings(newSettings);
+    
+    // shapeTypeが変更された場合、AppContextも即座に更新
+    if (name === 'shapeType') {
+      actions.updateSettings(newSettings);
+    }
   };
   
   const handleRangeChange = (e) => {
@@ -107,8 +139,9 @@ const Settings = ({ onComplete }) => {
     try {
       setIsProcessing(true);
       
-      // 設定を更新
+      // 設定を更新（処理前に必ず更新）
       actions.updateSettings(localSettings);
+      console.log('🔧 Updated settings:', localSettings);
       
       // 処理を開始
       actions.startProcessing();
@@ -119,6 +152,12 @@ const Settings = ({ onComplete }) => {
       const progressInterval = simulateProgress(estimatedTime);
       
       const startTime = Date.now();
+      
+      // 形状パラメータのデバッグログ
+      console.log('🔍 Form submission debug info:');
+      console.log('🎭 Current shapeType:', localSettings.shapeType);
+      console.log('🔧 Current shapeParams:', localSettings.shapeParams);
+      console.log('📦 AppContext settings:', settings);
       
       // APIに送信するパラメータを準備（拡張版）
       const params = {
@@ -151,6 +190,9 @@ const Settings = ({ onComplete }) => {
       };
       
       console.log('⚡ Sending enhanced high-speed API request:', params);
+      console.log('🎭 Shape parameters being sent:');
+      console.log('   - shape_type:', params.shape_type);
+      console.log('   - shape_params:', params.shape_params);
       
       // 画像処理を実行
       const result = await processImage(params);
@@ -169,6 +211,9 @@ const Settings = ({ onComplete }) => {
       // 処理成功
       actions.processingSuccess(result);
       setIsProcessing(false);
+      
+      // 処理成功後も設定を保持
+      console.log('✅ Processing completed, maintaining settings:', localSettings);
       
     } catch (error) {
       console.error('❌ Enhanced processing error:', error);
