@@ -4,9 +4,9 @@ import numpy as np
 import cv2
 from core.image_utils import ensure_array, get_grayscale
 
-def create_high_frequency_moire_stripes(hidden_img, pattern_type="horizontal", strength=0.015):
+def create_high_frequency_moire_stripes(hidden_img, pattern_type="horizontal", strength=0.015, color1="#000000", color2="#FFFFFF"):
     """
-    超高周波モアレ縞模様：Numpyベクトル化による超高速化
+    超高周波モアレ縞模様：Numpyベクトル化による超高速化（カスタム色対応）
     従来のピクセル単位ループを完全排除し、10-50倍高速化を実現
     """
     if isinstance(hidden_img, np.ndarray):
@@ -30,9 +30,17 @@ def create_high_frequency_moire_stripes(hidden_img, pattern_type="horizontal", s
     edges = cv2.Canny((hidden_contrast * 255).astype(np.uint8), 80, 150)
     edges_norm = edges.astype(np.float32) / 255.0
     
-    # 縞パターンの基本値
-    dark_value = 110.0
-    light_value = 146.0
+    # HEX色をRGB値に変換
+    def hex_to_rgb(hex_color):
+        hex_color = hex_color.lstrip('#')
+        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    
+    color1_rgb = hex_to_rgb(color1)
+    color2_rgb = hex_to_rgb(color2)
+    
+    # 縞パターンの基本値（カスタム色対応）
+    dark_value = np.mean(color1_rgb)
+    light_value = np.mean(color2_rgb)
     
     # **重要: ベクトル化による超高速化**
     if pattern_type == "horizontal":
@@ -75,16 +83,40 @@ def create_high_frequency_moire_stripes(hidden_img, pattern_type="horizontal", s
     # 値のクリッピング（ベクトル化）
     result_single = np.clip(result_single, 90, 166)
     
-    # RGB配列に変換（ブロードキャスト活用）
-    result = np.stack([result_single, result_single, result_single], axis=2)
+    # カスタム色でRGB配列に変換（カラー対応）
+    # 明るい縞と暗い縞の領域に基づいてカラー適用
+    result = np.zeros((height, width, 3), dtype=np.float32)
+    
+    # 明るい縞の領域にcolor2を適用
+    for i in range(3):
+        result[light_regions, i] = result_single[light_regions] * (color2_rgb[i] / 255.0)
+    
+    # 暗い縞の領域にcolor1を適用
+    for i in range(3):
+        result[dark_regions, i] = result_single[dark_regions] * (color1_rgb[i] / 255.0)
+    
+    # グレースケール部分の色調整
+    gray_regions = ~(light_regions | dark_regions)
+    if np.any(gray_regions):
+        avg_color = [(color1_rgb[i] + color2_rgb[i]) / 2 for i in range(3)]
+        for i in range(3):
+            result[gray_regions, i] = result_single[gray_regions] * (avg_color[i] / 255.0)
+    
+    result *= 255.0
     
     return result.astype(np.uint8)
 
-def create_moire_hidden_stripes(hidden_img, pattern_type="horizontal", strength=0.02):
+def create_moire_hidden_stripes(hidden_img, pattern_type="horizontal", strength=0.02, color1="#000000", color2="#FFFFFF"):
     """
-    モアレ効果を利用した隠し画像埋め込み（完全ベクトル化版）
+    モアレ効果を利用した隠し画像埋め込み（完全ベクトル化版・カラー対応）
     従来のピクセルループを排除し、Numpyの配列演算で10-30倍高速化
     """
+    from .base import hex_to_rgb
+    
+    # HEX色をRGBに変換
+    color1_rgb = hex_to_rgb(color1)
+    color2_rgb = hex_to_rgb(color2)
+    
     if isinstance(hidden_img, np.ndarray):
         hidden_array = hidden_img.astype(np.float32)
     else:
@@ -110,13 +142,13 @@ def create_moire_hidden_stripes(hidden_img, pattern_type="horizontal", strength=
     if pattern_type == "horizontal":
         # 行ベースの縞パターン生成（メモリ効率的）
         y_coords = np.arange(height).reshape(-1, 1)
-        base_stripes = (y_coords % 2) * 255.0  # 0または255の縞
+        base_stripes = (y_coords % 2)  # 0または1の縞
         stripe_pattern = np.broadcast_to(base_stripes, (height, width))
         
     else:  # vertical
         # 列ベースの縞パターン生成（メモリ効率的）
         x_coords = np.arange(width).reshape(1, -1)
-        base_stripes = (x_coords % 2) * 255.0  # 0または255の縞
+        base_stripes = (x_coords % 2)  # 0または1の縞
         stripe_pattern = np.broadcast_to(base_stripes, (height, width))
     
     # **完全ベクトル化による明度調整**
@@ -127,21 +159,62 @@ def create_moire_hidden_stripes(hidden_img, pattern_type="horizontal", strength=
     edge_enhancement = np.where(edges_norm > 0.5, 1.5, 1.0)
     final_adjustment = pixel_adjustment * edge_enhancement
     
+    # 基準値設定
+    dark_base = 100  # 暗い縞の基準値
+    light_base = 155  # 明るい縞の基準値
+    
+    # 縞の種類に応じた基準値適用
+    base_values = np.where(stripe_pattern == 0, dark_base, light_base)
+    
     # 縞パターンに調整を適用（完全ベクトル化）
-    result = stripe_pattern + final_adjustment
+    result_single = base_values + final_adjustment
     
     # 値のクリッピング（ベクトル化）
-    result = np.clip(result, 0, 255)
+    result_single = np.clip(result_single, 0, 255)
     
-    # RGB変換（ブロードキャスト最適化）
-    result_rgb = np.stack([result, result, result], axis=2)
+    # カスタム色でRGB配列に変換
+    result = np.zeros((height, width, 3), dtype=np.float32)
     
-    return result_rgb.astype(np.uint8)
+    # 暗い縞の領域にcolor1を適用
+    dark_regions = stripe_pattern == 0
+    for i in range(3):
+        result[dark_regions, i] = result_single[dark_regions] * (color1_rgb[i] / 255.0)
+    
+    # 明るい縞の領域にcolor2を適用
+    light_regions = stripe_pattern == 1
+    for i in range(3):
+        result[light_regions, i] = result_single[light_regions] * (color2_rgb[i] / 255.0)
+    
+    return result.astype(np.uint8)
 
-def create_adaptive_moire_stripes(hidden_img, pattern_type="horizontal", mode="adaptive"):
+def create_adaptive_moire_stripes(hidden_img, pattern_type="horizontal", mode="adaptive", color1="#000000", color2="#FFFFFF"):
     """
-    適応型モアレ縞模様：ベクトル化による高速化
+    適応型モアレ縞模様：ベクトル化による高速化（カスタム色対応）
     """
+    from .base import hex_to_rgb
+    
+    # HEX色をRGBに変換
+    color1_rgb = hex_to_rgb(color1)
+    color2_rgb = hex_to_rgb(color2)
+    
+    # 画像準備
+    if isinstance(hidden_img, np.ndarray):
+        hidden_array = hidden_img.astype(np.float32)
+    else:
+        hidden_array = np.array(hidden_img).astype(np.float32)
+    
+    height, width = hidden_array.shape[:2]
+    
+    # グレースケール変換
+    if len(hidden_array.shape) == 3:
+        hidden_gray = cv2.cvtColor(hidden_array.astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)
+    else:
+        hidden_gray = hidden_array
+    
+    # 正規化とコントラスト強調
+    hidden_norm = hidden_gray / 255.0
+    hidden_contrast = np.clip((hidden_norm - 0.5) * 2.0 + 0.5, 0, 1)
+    
     # 強度マッピング（辞書アクセス最適化）
     strength_map = {
         "high_frequency": 0.015,
@@ -159,16 +232,66 @@ def create_adaptive_moire_stripes(hidden_img, pattern_type="horizontal", mode="a
     
     strength = strength_map.get(mode, 0.02)
     
-    # 最適化された関数選択
-    if mode == "high_frequency":
-        return create_high_frequency_moire_stripes(hidden_img, pattern_type, strength)
-    else:
-        return create_moire_hidden_stripes(hidden_img, pattern_type, strength)
+    # 縞模様パターン生成（ベクトル化）
+    if pattern_type == "horizontal":
+        y_indices = np.arange(height).reshape(-1, 1)
+        stripe_pattern = np.sin(y_indices * 0.8) > 0
+        stripe_pattern = np.broadcast_to(stripe_pattern, (height, width))
+    else:  # vertical
+        x_indices = np.arange(width).reshape(1, -1)
+        stripe_pattern = np.sin(x_indices * 0.8) > 0
+        stripe_pattern = np.broadcast_to(stripe_pattern, (height, width))
+    
+    # 隠し画像情報の強度調整
+    hidden_influence = hidden_contrast * strength
+    
+    # 基準値の計算
+    light_base = 155
+    dark_base = 100
+    
+    # 明るい縞と暗い縞の領域
+    light_regions = stripe_pattern
+    dark_regions = ~stripe_pattern
+    
+    # 最終値の計算（ベクトル化）
+    result_single = np.zeros((height, width), dtype=np.float32)
+    
+    # 明るい縞の処理
+    light_adjustment = hidden_influence * 20
+    result_single[light_regions] = light_base + light_adjustment[light_regions]
+    
+    # 暗い縞の処理
+    dark_adjustment = hidden_influence * 15
+    result_single[dark_regions] = dark_base + dark_adjustment[dark_regions]
+    
+    # 値のクリッピング
+    result_single = np.clip(result_single, 90, 166)
+    
+    # カスタム色でRGB配列に変換
+    result = np.zeros((height, width, 3), dtype=np.float32)
+    
+    # 明るい縞の領域にcolor2を適用
+    for i in range(3):
+        result[light_regions, i] = result_single[light_regions] * (color2_rgb[i] / 255.0)
+    
+    # 暗い縞の領域にcolor1を適用
+    for i in range(3):
+        result[dark_regions, i] = result_single[dark_regions] * (color1_rgb[i] / 255.0)
+    
+    result *= 255.0
+    
+    return result.astype(np.uint8)
 
-def create_perfect_moire_pattern(hidden_img, pattern_type="horizontal"):
+def create_perfect_moire_pattern(hidden_img, pattern_type="horizontal", color1="#000000", color2="#FFFFFF"):
     """
-    完璧なモアレパターン：ベクトル化による超高速化
+    完璧なモアレパターン：ベクトル化による超高速化（カラー対応）
     """
+    from .base import hex_to_rgb
+    
+    # HEX色をRGBに変換
+    color1_rgb = hex_to_rgb(color1)
+    color2_rgb = hex_to_rgb(color2)
+    
     if isinstance(hidden_img, np.ndarray):
         hidden_array = hidden_img.astype(np.float32)
     else:
@@ -197,40 +320,48 @@ def create_perfect_moire_pattern(hidden_img, pattern_type="horizontal"):
     if pattern_type == "horizontal":
         # 行ベース縞パターン（メモリ効率的）
         y_indices = np.arange(height).reshape(-1, 1)
-        base_stripes = (y_indices % 2) * 255.0
+        base_stripes = (y_indices % 2)  # 0または1
         stripe_base = np.broadcast_to(base_stripes, (height, width))
         
     else:  # vertical
         # 列ベース縞パターン（メモリ効率的）
         x_indices = np.arange(width).reshape(1, -1)
-        base_stripes = (x_indices % 2) * 255.0
+        base_stripes = (x_indices % 2)  # 0または1
         stripe_base = np.broadcast_to(base_stripes, (height, width))
     
     # **完全ベクトル化による調整計算**
-    # 白い縞の処理（ベクトル化）
-    white_regions = stripe_base == 255.0
-    white_adjustment = hidden_contrast * strength * 255.0
-    white_edge_boost = np.where(edges_norm > 0.3, 1.2, 1.0)
-    white_final = 220.0 + (white_adjustment * white_edge_boost)
+    # 明るい縞の処理（ベクトル化）
+    light_regions = stripe_base == 1
+    light_adjustment = hidden_contrast * strength * 255.0
+    light_edge_boost = np.where(edges_norm > 0.3, 1.2, 1.0)
+    light_final = 220.0 + (light_adjustment * light_edge_boost)
     
-    # 黒い縞の処理（ベクトル化）
-    black_regions = stripe_base == 0.0
-    black_adjustment = (1.0 - hidden_contrast) * strength * 255.0
-    black_edge_boost = np.where(edges_norm > 0.3, 1.2, 1.0)
-    black_final = 40.0 - (black_adjustment * black_edge_boost)
+    # 暗い縞の処理（ベクトル化）
+    dark_regions = stripe_base == 0
+    dark_adjustment = (1.0 - hidden_contrast) * strength * 255.0
+    dark_edge_boost = np.where(edges_norm > 0.3, 1.2, 1.0)
+    dark_final = 40.0 - (dark_adjustment * dark_edge_boost)
     
     # 結果合成（ベクトル化）
-    result = np.zeros_like(stripe_base)
-    result[white_regions] = white_final[white_regions]
-    result[black_regions] = black_final[black_regions]
+    result_single = np.zeros((height, width), dtype=np.float32)
+    result_single[light_regions] = light_final[light_regions]
+    result_single[dark_regions] = dark_final[dark_regions]
     
     # クリッピング（ベクトル化）
-    result = np.clip(result, 0, 255)
+    result_single = np.clip(result_single, 0, 255)
     
-    # RGB変換（ブロードキャスト）
-    result_rgb = np.stack([result, result, result], axis=2)
+    # カスタム色でRGB配列に変換
+    result = np.zeros((height, width, 3), dtype=np.float32)
     
-    return result_rgb.astype(np.uint8)
+    # 明るい縞の領域にcolor2を適用
+    for i in range(3):
+        result[light_regions, i] = result_single[light_regions] * (color2_rgb[i] / 255.0)
+    
+    # 暗い縞の領域にcolor1を適用
+    for i in range(3):
+        result[dark_regions, i] = result_single[dark_regions] * (color1_rgb[i] / 255.0)
+    
+    return result.astype(np.uint8)
 
 # ベクトル化による超高速パターン生成関数
 def create_vectorized_stripe_pattern(height, width, pattern_type="horizontal", frequency=1):
