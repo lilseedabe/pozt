@@ -22,7 +22,10 @@ const Settings = ({ onComplete }) => {
     blurRadius: settings.blurRadius || 0,                     // デフォルト0
     contrastBoost: settings.contrastBoost || 1.0,
     colorShift: settings.colorShift || 0.0,
-    sharpnessBoost: settings.sharpnessBoost || 0.0            // 新しいパラメータ
+    sharpnessBoost: settings.sharpnessBoost || 0.0,           // 新しいパラメータ
+    // 縞模様の色設定を追加
+    stripeColor1: settings.stripeColor1 || '#000000',         // 縞色1（デフォルト黒）
+    stripeColor2: settings.stripeColor2 || '#ffffff'          // 縞色2（デフォルト白）
   });
   
   const [isProcessing, setIsProcessing] = useState(false);
@@ -135,7 +138,10 @@ const Settings = ({ onComplete }) => {
         blur_radius: localSettings.blurRadius,
         contrast_boost: localSettings.contrastBoost,
         color_shift: localSettings.colorShift,
-        sharpness_boost: localSettings.sharpnessBoost  // 新しいパラメータを追加
+        sharpness_boost: localSettings.sharpnessBoost,  // 新しいパラメータを追加
+        // 縞模様の色パラメータを追加
+        stripe_color1: localSettings.stripeColor1,
+        stripe_color2: localSettings.stripeColor2
       };
       
       console.log('⚡ Sending enhanced high-speed API request:', params);
@@ -265,10 +271,10 @@ const Settings = ({ onComplete }) => {
           <h3>縞パターン設定</h3>
           <div className="form-control">
             <label htmlFor="patternType">パターン方向</label>
-            <select 
-              id="patternType" 
-              name="patternType" 
-              value={localSettings.patternType} 
+            <select
+              id="patternType"
+              name="patternType"
+              value={localSettings.patternType}
               onChange={handleChange}
               disabled={isProcessing}
             >
@@ -279,10 +285,10 @@ const Settings = ({ onComplete }) => {
           
           <div className="form-control">
             <label htmlFor="stripeMethod">縞模様タイプ</label>
-            <select 
-              id="stripeMethod" 
-              name="stripeMethod" 
-              value={localSettings.stripeMethod} 
+            <select
+              id="stripeMethod"
+              name="stripeMethod"
+              value={localSettings.stripeMethod}
               onChange={handleChange}
               disabled={isProcessing}
             >
@@ -299,6 +305,164 @@ const Settings = ({ onComplete }) => {
             </select>
             <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
               🚀=超高速 ⚡=高速 🐌=高品質だが時間要 | overlayが隠し画像最適
+            </small>
+          </div>
+
+          {/* 縞模様の色設定を追加 */}
+          <div className="parameter-section" style={{ marginTop: '20px' }}>
+            <h4>🎨 縞模様カラー設定</h4>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <div className="form-control">
+                <label htmlFor="stripeColor1">縞色1（メイン）</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input
+                    type="color"
+                    id="stripeColor1"
+                    name="stripeColor1"
+                    value={localSettings.stripeColor1}
+                    onChange={handleChange}
+                    disabled={isProcessing}
+                    style={{
+                      width: '60px',
+                      height: '40px',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={localSettings.stripeColor1}
+                    onChange={handleChange}
+                    name="stripeColor1"
+                    disabled={isProcessing}
+                    style={{
+                      flex: 1,
+                      padding: '8px',
+                      border: '1px solid var(--border-primary)',
+                      borderRadius: '6px',
+                      fontSize: '0.9rem',
+                      fontFamily: 'monospace'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="form-control">
+                <label htmlFor="stripeColor2">縞色2（サブ）</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input
+                    type="color"
+                    id="stripeColor2"
+                    name="stripeColor2"
+                    value={localSettings.stripeColor2}
+                    onChange={handleChange}
+                    disabled={isProcessing}
+                    style={{
+                      width: '60px',
+                      height: '40px',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={localSettings.stripeColor2}
+                    onChange={handleChange}
+                    name="stripeColor2"
+                    disabled={isProcessing}
+                    style={{
+                      flex: 1,
+                      padding: '8px',
+                      border: '1px solid var(--border-primary)',
+                      borderRadius: '6px',
+                      fontSize: '0.9rem',
+                      fontFamily: 'monospace'
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* プリセットカラー */}
+            <div style={{ marginTop: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.9rem', fontWeight: '600' }}>
+                プリセットカラー
+              </label>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {[
+                  { name: 'デフォルト', color1: '#000000', color2: '#ffffff' },
+                  { name: '暖色系', color1: '#FF6B6B', color2: '#FFE4E4' },
+                  { name: '寒色系', color1: '#4ECDC4', color2: '#E4F8F7' },
+                  { name: '青空', color1: '#45B7D1', color2: '#E1F3FA' },
+                  { name: '森林', color1: '#96CEB4', color2: '#F0F8F5' },
+                  { name: '夕焼け', color1: '#FFA07A', color2: '#FFEEE6' }
+                ].map((preset, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => {
+                      setLocalSettings({
+                        ...localSettings,
+                        stripeColor1: preset.color1,
+                        stripeColor2: preset.color2
+                      });
+                    }}
+                    disabled={isProcessing}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '5px 10px',
+                      border: '1px solid var(--border-primary)',
+                      borderRadius: '6px',
+                      background: 'var(--bg-secondary)',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseOver={(e) => e.target.style.background = 'var(--bg-tertiary)'}
+                    onMouseOut={(e) => e.target.style.background = 'var(--bg-secondary)'}
+                  >
+                    <div style={{
+                      width: '16px',
+                      height: '16px',
+                      background: `linear-gradient(90deg, ${preset.color1} 50%, ${preset.color2} 50%)`,
+                      borderRadius: '2px'
+                    }} />
+                    {preset.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* カラープレビュー */}
+            <div style={{ marginTop: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', fontWeight: '600' }}>
+                プレビュー
+              </label>
+              <div style={{
+                width: '100%',
+                height: '40px',
+                background: `linear-gradient(90deg, ${localSettings.stripeColor1} 0%, ${localSettings.stripeColor1} 50%, ${localSettings.stripeColor2} 50%, ${localSettings.stripeColor2} 100%)`,
+                backgroundSize: '20px 100%',
+                borderRadius: '8px',
+                border: '1px solid var(--border-primary)',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }} />
+            </div>
+
+            <small style={{
+              color: 'var(--text-muted)',
+              fontSize: '0.8rem',
+              display: 'block',
+              marginTop: '10px'
+            }}>
+              💡 縞模様の色を自由に変更できます。HEX形式（#000000）での直接入力も可能です。
             </small>
           </div>
         </div>
