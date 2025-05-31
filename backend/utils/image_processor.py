@@ -73,7 +73,9 @@ def vectorized_pattern_generation(hidden_array, pattern_type, stripe_method, pro
             'blur_radius': 0,               # 最適化：ブラーなしで隠し画像最鮮明
             'contrast_boost': 1.0,
             'color_shift': 0.0,
-            'sharpness_boost': 0.0          # 新パラメータ：シャープネス調整
+            'sharpness_boost': 0.0,         # 新パラメータ：シャープネス調整
+            'stripe_color1': '#000000',     # デフォルト縞模様カラー1
+            'stripe_color2': '#FFFFFF'      # デフォルト縞模様カラー2
         }
     
     # パラメータを展開
@@ -86,18 +88,21 @@ def vectorized_pattern_generation(hidden_array, pattern_type, stripe_method, pro
     contrast_boost = processing_params.get('contrast_boost', 1.0)
     color_shift = processing_params.get('color_shift', 0.0)
     sharpness_boost = processing_params.get('sharpness_boost', 0.0)         # 新パラメータ
+    stripe_color1 = processing_params.get('stripe_color1', '#000000')       # 縞模様カラー1
+    stripe_color2 = processing_params.get('stripe_color2', '#FFFFFF')       # 縞模様カラー2
     
     try:
         config = get_cached_pattern_config(stripe_method)
         print(f"🚀 Optimized Vectorized pattern generation: {stripe_method}")
         print(f"Config: {config}")
         print(f"Optimized Params: opacity={opacity}, blur={blur_radius}, sharpness={sharpness_boost}")
+        print(f"Stripe Colors: {stripe_color1} - {stripe_color2}")
 
         # **最適化パラメータ適用処理**
         # オーバーレイ専用処理（最適化パラメータ対応）
         if stripe_method == "overlay":
             overlay_pattern = create_optimized_overlay_pattern(
-                hidden_array, pattern_type, opacity, blur_radius, contrast_boost, sharpness_boost
+                hidden_array, pattern_type, opacity, blur_radius, contrast_boost, sharpness_boost, stripe_color1, stripe_color2
             )
             return optimize_image_for_processing(overlay_pattern)
 
@@ -106,25 +111,25 @@ def vectorized_pattern_generation(hidden_array, pattern_type, stripe_method, pro
         with ThreadPoolExecutor(max_workers=2) as executor:
             # オーバーレイパターンを並列生成（最適化パラメータ適用）
             overlay_future = executor.submit(
-                create_optimized_overlay_pattern, 
-                hidden_array, pattern_type, opacity, blur_radius, contrast_boost, sharpness_boost
+                create_optimized_overlay_pattern,
+                hidden_array, pattern_type, opacity, blur_radius, contrast_boost, sharpness_boost, stripe_color1, stripe_color2
             )
             
             # ベースパターンを並列生成（最適化パラメータ適用）
             if config["base_method"] == "high_frequency":
                 base_future = executor.submit(
-                    create_optimized_high_frequency_pattern, 
-                    hidden_array, pattern_type, strength, enhancement_factor, frequency, sharpness_boost
+                    create_optimized_high_frequency_pattern,
+                    hidden_array, pattern_type, strength, enhancement_factor, frequency, sharpness_boost, stripe_color1, stripe_color2
                 )
             elif config["base_method"] and "adaptive" in config["base_method"]:
                 base_future = executor.submit(
-                    create_optimized_adaptive_pattern, 
-                    hidden_array, pattern_type, strength, contrast_boost, color_shift, sharpness_boost
+                    create_optimized_adaptive_pattern,
+                    hidden_array, pattern_type, strength, contrast_boost, color_shift, sharpness_boost, stripe_color1, stripe_color2
                 )
             else:
                 base_future = executor.submit(
-                    create_optimized_adaptive_pattern, 
-                    hidden_array, pattern_type, strength, contrast_boost, color_shift, sharpness_boost
+                    create_optimized_adaptive_pattern,
+                    hidden_array, pattern_type, strength, contrast_boost, color_shift, sharpness_boost, stripe_color1, stripe_color2
                 )
             
             # 結果を並列取得
@@ -172,7 +177,7 @@ def vectorized_pattern_generation(hidden_array, pattern_type, stripe_method, pro
         try:
             print("🔄 Using optimized high-speed fallback pattern generation")
             overlay_pattern = create_optimized_overlay_pattern(
-                hidden_array, pattern_type, opacity, blur_radius, contrast_boost, sharpness_boost
+                hidden_array, pattern_type, opacity, blur_radius, contrast_boost, sharpness_boost, stripe_color1, stripe_color2
             )
             return optimize_image_for_processing(overlay_pattern)
             
@@ -220,7 +225,9 @@ def batch_process_images(image_configs, max_workers=4):
                 config.get('add_border', True),
                 config.get('border_width', 3),
                 config.get('overlay_ratio', 0.4),
-                config.get('processing_params', None)  # 最適化パラメータ対応
+                config.get('processing_params', None),  # 最適化パラメータ対応
+                config.get('stripe_color1', '#000000'),  # 縞模様カラー1
+                config.get('stripe_color2', '#FFFFFF')   # 縞模様カラー2
             ): config for config in image_configs
         }
         
@@ -755,10 +762,11 @@ def evaluate_pattern_quality(pattern_result):
         print(f"Quality evaluation error: {e}")
         return 0.0
 
-def create_optimized_overlay_pattern(hidden_array, pattern_type, opacity, blur_radius, contrast_boost, sharpness_boost):
-    """最適化パラメータ対応オーバーレイパターン生成"""
+def create_optimized_overlay_pattern(hidden_array, pattern_type, opacity, blur_radius, contrast_boost, sharpness_boost, stripe_color1="#000000", stripe_color2="#FFFFFF"):
+    """最適化パラメータ対応オーバーレイパターン生成（縞模様カラー対応）"""
     
     print(f"🎯 Creating optimized overlay pattern: opacity={opacity}, blur={blur_radius}, sharpness={sharpness_boost}")
+    print(f"🎨 Stripe colors: {stripe_color1} - {stripe_color2}")
     
     # PIL画像に変換（シャープネス処理用）
     hidden_pil = Image.fromarray(hidden_array.astype('uint8'))
@@ -802,19 +810,29 @@ def create_optimized_overlay_pattern(hidden_array, pattern_type, opacity, blur_r
     # マスクを正規化（プロトタイプと同じ）
     mask = blurred_mask / 255.0 * effective_opacity
     
-    # 均一な縞模様を作成（プロトタイプと同じ）
+    # HEX色をRGBに変換
+    def hex_to_rgb(hex_color):
+        hex_color = hex_color.lstrip('#')
+        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    
+    color1_rgb = hex_to_rgb(stripe_color1)
+    color2_rgb = hex_to_rgb(stripe_color2)
+    
+    print(f"  🎨 Using stripe colors: {color1_rgb} - {color2_rgb}")
+    
+    # カスタム色で縞模様を作成
     stripes = np.zeros((height, width, 3), dtype=np.uint8)
     
     if pattern_type == "horizontal":
-        # 横縞パターン（プロトタイプと同じ）
+        # 横縞パターン（カスタム色対応）
         for y in range(height):
-            stripe_value = 255 if y % 2 == 0 else 0
-            stripes[y, :] = [stripe_value, stripe_value, stripe_value]
+            color = color1_rgb if y % 2 == 0 else color2_rgb
+            stripes[y, :] = [color[0], color[1], color[2]]
     else:
-        # 縦縞パターン（プロトタイプと同じ）
+        # 縦縞パターン（カスタム色対応）
         for x in range(width):
-            stripe_value = 255 if x % 2 == 0 else 0
-            stripes[:, x] = [stripe_value, stripe_value, stripe_value]
+            color = color1_rgb if x % 2 == 0 else color2_rgb
+            stripes[:, x] = [color[0], color[1], color[2]]
     
     # 均一なグレー（プロトタイプと同じ）
     gray = np.ones((height, width, 3), dtype=np.float32) * 128
@@ -844,11 +862,12 @@ def create_optimized_overlay_pattern(hidden_array, pattern_type, opacity, blur_r
     
     return result.astype(np.uint8)
 
-def create_optimized_high_frequency_pattern(hidden_array, pattern_type, strength, enhancement_factor, frequency, sharpness_boost):
-    """最適化パラメータ対応高周波パターン生成"""
+def create_optimized_high_frequency_pattern(hidden_array, pattern_type, strength, enhancement_factor, frequency, sharpness_boost, stripe_color1="#000000", stripe_color2="#FFFFFF"):
+    """最適化パラメータ対応高周波パターン生成（縞模様カラー対応）"""
     from patterns.moire import create_high_frequency_moire_stripes
     
     print(f"🌊 Creating optimized high frequency pattern: strength={strength}, freq={frequency}, sharpness={sharpness_boost}")
+    print(f"🎨 Stripe colors: {stripe_color1} - {stripe_color2}")
     
     # シャープネス前処理
     if abs(sharpness_boost) > 0.001:
@@ -868,8 +887,8 @@ def create_optimized_high_frequency_pattern(hidden_array, pattern_type, strength
     # 強度調整
     adjusted_strength = max(0.005, min(0.1, strength))
     
-    # 基本パターンを生成
-    base_pattern = create_high_frequency_moire_stripes(processed_hidden_array, pattern_type, adjusted_strength)
+    # 基本パターンを生成（カスタム色対応）
+    base_pattern = create_high_frequency_moire_stripes(processed_hidden_array, pattern_type, adjusted_strength, stripe_color1, stripe_color2)
     
     # 周波数調整（より明確な差を出すため）
     if frequency != 1:
@@ -902,11 +921,12 @@ def create_optimized_high_frequency_pattern(hidden_array, pattern_type, strength
     
     return base_pattern.astype(np.uint8)
 
-def create_optimized_adaptive_pattern(hidden_array, pattern_type, strength, contrast_boost, color_shift, sharpness_boost):
-    """最適化パラメータ対応適応パターン生成"""
+def create_optimized_adaptive_pattern(hidden_array, pattern_type, strength, contrast_boost, color_shift, sharpness_boost, stripe_color1="#000000", stripe_color2="#FFFFFF"):
+    """最適化パラメータ対応適応パターン生成（縞模様カラー対応）"""
     from patterns.moire import create_adaptive_moire_stripes
     
     print(f"🎯 Creating optimized adaptive pattern: strength={strength}, contrast={contrast_boost}, sharpness={sharpness_boost}")
+    print(f"🎨 Stripe colors: {stripe_color1} - {stripe_color2}")
     
     # シャープネス前処理
     if abs(sharpness_boost) > 0.001:
@@ -926,8 +946,8 @@ def create_optimized_adaptive_pattern(hidden_array, pattern_type, strength, cont
     # 強度調整
     adjusted_strength = max(0.005, min(0.1, strength))
     
-    # 基本パターンを生成
-    base_pattern = create_adaptive_moire_stripes(processed_hidden_array, pattern_type, "adaptive")
+    # 基本パターンを生成（カスタム色対応）
+    base_pattern = create_adaptive_moire_stripes(processed_hidden_array, pattern_type, "adaptive", stripe_color1, stripe_color2)
     
     # コントラスト調整
     if abs(contrast_boost - 1.0) > 0.01:
@@ -954,7 +974,9 @@ def process_hidden_image(
     add_border: bool = True,
     border_width: int = 3,
     overlay_ratio: float = 0.4,
-    processing_params: dict = None  # 最適化パラメータ辞書
+    processing_params: dict = None,  # 最適化パラメータ辞書
+    stripe_color1: str = "#000000",  # 縞模様カラー1
+    stripe_color2: str = "#FFFFFF"   # 縞模様カラー2
 ):
     """
     超高速画像処理：完全ベクトル化による5-20倍高速化 + 最適化パラメータ対応
@@ -971,7 +993,9 @@ def process_hidden_image(
             'contrast_boost': 1.0,
             'color_shift': 0.0,
             'overlay_ratio': overlay_ratio,
-            'sharpness_boost': 0.0                  # 新パラメータ
+            'sharpness_boost': 0.0,                 # 新パラメータ
+            'stripe_color1': stripe_color1,         # 縞模様カラー1
+            'stripe_color2': stripe_color2          # 縞模様カラー2
         }
     else:
         # overlay_ratioを確実に含める
@@ -980,6 +1004,9 @@ def process_hidden_image(
         processing_params.setdefault('opacity', 0.0)
         processing_params.setdefault('blur_radius', 0)
         processing_params.setdefault('sharpness_boost', 0.0)
+        # 縞模様カラーパラメータを追加
+        processing_params['stripe_color1'] = stripe_color1
+        processing_params['stripe_color2'] = stripe_color2
     
     start_time = time.time()
     settings = get_settings()
@@ -988,6 +1015,7 @@ def process_hidden_image(
     print(f"Parameters: {pattern_type}, {stripe_method}, {resize_method}")
     print(f"Region: {region}")
     print(f"Optimized Params: opacity={processing_params.get('opacity')}, blur={processing_params.get('blur_radius')}, sharpness={processing_params.get('sharpness_boost')}")
+    print(f"Stripe Colors: {processing_params.get('stripe_color1')} - {processing_params.get('stripe_color2')}")
 
     try:
         # === フェーズ1: 超高速画像読み込み ===
@@ -1197,3 +1225,4 @@ def process_hidden_image(
         traceback.print_exc()
         clear_memory()
         raise e
+
