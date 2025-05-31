@@ -141,7 +141,10 @@ const Settings = ({ onComplete }) => {
         sharpness_boost: localSettings.sharpnessBoost,  // 新しいパラメータを追加
         // 縞模様の色パラメータを追加
         stripe_color1: localSettings.stripeColor1,
-        stripe_color2: localSettings.stripeColor2
+        stripe_color2: localSettings.stripeColor2,
+        // 形状選択パラメータを追加
+        shape_type: localSettings.shapeType,
+        shape_params: localSettings.shapeParams
       };
       
       console.log('⚡ Sending enhanced high-speed API request:', params);
@@ -851,3 +854,4 @@ const Settings = ({ onComplete }) => {
 };
 
 export default Settings;
+
