@@ -12,6 +12,7 @@ from functools import lru_cache
 from config.app import get_settings
 from core.image_utils import resize_to_fixed_size, calculate_resize_factors, add_black_border
 from core.region_utils import extract_region_from_image
+from core.shape_masks import create_custom_shape_mask, apply_mask_to_region, get_available_shapes
 from patterns.moire import create_adaptive_moire_stripes, create_high_frequency_moire_stripes
 from patterns.overlay import create_overlay_moire_pattern
 from patterns.hybrid import create_hybrid_moire_pattern, apply_overlay_fusion
@@ -976,7 +977,9 @@ def process_hidden_image(
     overlay_ratio: float = 0.4,
     processing_params: dict = None,  # 最適化パラメータ辞書
     stripe_color1: str = "#000000",  # 縞模様カラー1
-    stripe_color2: str = "#FFFFFF"   # 縞模様カラー2
+    stripe_color2: str = "#FFFFFF",  # 縞模様カラー2
+    shape_type: str = "rectangle",   # 新パラメータ: 形状タイプ
+    shape_params: dict = None        # 新パラメータ: 形状パラメータ
 ):
     """
     超高速画像処理：完全ベクトル化による5-20倍高速化 + 最適化パラメータ対応
@@ -1130,8 +1133,31 @@ def process_hidden_image(
         phase_time = time.time() - phase_start
         print(f"⚡ Phase 3 (Optimized Hidden image prep): {phase_time:.2f}s")
 
-        # === フェーズ4: 超高速最適化パラメータパターン生成 ===
+        # === フェーズ4: 形状マスク生成と適用 ===
         phase_start = time.time()
+        
+        # **形状マスクの生成（新機能）**
+        if shape_type != "rectangle":
+            print(f"🎭 Creating shape mask: {shape_type}")
+            
+            # 形状パラメータの準備
+            if shape_params is None:
+                shape_params = {}
+            
+            # 形状マスクの生成
+            shape_mask = create_custom_shape_mask(
+                width_fixed, height_fixed, shape_type, **shape_params
+            )
+            print(f"Shape mask created: {shape_mask.shape}")
+            
+            # 隠し画像に形状マスクを適用
+            if len(hidden_array.shape) == 3:  # カラー画像
+                mask_3d = np.stack([shape_mask, shape_mask, shape_mask], axis=2) / 255.0
+                hidden_array = (hidden_array * mask_3d).astype(np.uint8)
+            else:  # グレースケール
+                hidden_array = (hidden_array * (shape_mask / 255.0)).astype(np.uint8)
+            
+            print(f"Shape mask applied to hidden image")
         
         # **最適化パラメータベクトル化パターン生成**
         stripe_pattern = vectorized_pattern_generation(
@@ -1144,7 +1170,7 @@ def process_hidden_image(
         clear_memory()
 
         phase_time = time.time() - phase_start
-        print(f"⚡ Phase 4 (Optimized Pattern generation): {phase_time:.2f}s")
+        print(f"⚡ Phase 4 (Shape mask + Pattern generation): {phase_time:.2f}s")
 
         # === フェーズ5: 超高速最終合成 ===
         phase_start = time.time()
@@ -1225,4 +1251,3 @@ def process_hidden_image(
         traceback.print_exc()
         clear_memory()
         raise e
-
