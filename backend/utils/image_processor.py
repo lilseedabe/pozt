@@ -7,6 +7,7 @@ import uuid
 import os
 import time
 import gc
+import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from config.app import get_settings
@@ -979,7 +980,7 @@ def process_hidden_image(
     stripe_color1: str = "#000000",  # 縞模様カラー1
     stripe_color2: str = "#FFFFFF",  # 縞模様カラー2
     shape_type: str = "rectangle",   # 新パラメータ: 形状タイプ
-    shape_params: dict = None        # 新パラメータ: 形状パラメータ
+    shape_params: str = "{}"        # 新パラメータ: 形状パラメータ（JSON文字列）
 ):
     """
     超高速画像処理：完全ベクトル化による5-20倍高速化 + 最適化パラメータ対応
@@ -1028,30 +1029,46 @@ def process_hidden_image(
             raise FileNotFoundError(f"Base image not found: {base_img_path}")
 
         # **PIL最適化読み込み**
-        with Image.open(base_img_path) as base_img:
-            original_size = (base_img.width, base_img.height)
-            print(f"Original size: {original_size}")
-            
-            # 大画像の事前リサイズ（高速化）
-            if base_img.width * base_img.height > 8000000:
-                print("⚡ Large image detected, applying fast pre-resize...")
-                base_img.thumbnail((3000, 3000), Image.Resampling.BILINEAR)
+        base_img_orig = Image.open(base_img_path)
+        original_size = (base_img_orig.width, base_img_orig.height)
+        print(f"Original size: {original_size}")
+        
+        # RGBAの場合はRGBに変換（アルファチャンネルを削除）
+        if base_img_orig.mode == 'RGBA':
+            base_img = Image.new('RGB', base_img_orig.size, (255, 255, 255))
+            base_img.paste(base_img_orig, mask=base_img_orig.split()[3])
+            base_img_orig.close()
+            print(f"Converted base image from RGBA to RGB")
+        else:
+            base_img = base_img_orig
+        
+        # 大画像の事前リサイズ（高速化）
+        if base_img.width * base_img.height > 8000000:
+            print("⚡ Large image detected, applying fast pre-resize...")
+            base_img.thumbnail((3000, 3000), Image.Resampling.BILINEAR)
 
-            # **超高速領域抽出（PIL最適化）**
-            x, y, width, height = region
-            
-            # 境界チェック（ベクトル化）
-            bounds = np.array([x, y, width, height])
-            img_bounds = np.array([0, 0, base_img.width, base_img.height])
-            
-            x = max(0, min(x, base_img.width - 1))
-            y = max(0, min(y, base_img.height - 1))
-            width = min(width, base_img.width - x)
-            height = min(height, base_img.height - y)
-            
-            # 高速クロップ
-            region_pil = base_img.crop((x, y, x + width, y + height))
-            print(f"🖼️ Fast PIL crop completed: {region_pil.size}")
+        # **超高速領域抽出（PIL最適化）**
+        x, y, width, height = region
+        
+        # 境界チェック（ベクトル化）
+        bounds = np.array([x, y, width, height])
+        img_bounds = np.array([0, 0, base_img.width, base_img.height])
+        
+        x = max(0, min(x, base_img.width - 1))
+        y = max(0, min(y, base_img.height - 1))
+        width = min(width, base_img.width - x)
+        height = min(height, base_img.height - y)
+        
+        # 高速クロップ
+        region_pil = base_img.crop((x, y, x + width, y + height))
+        print(f"🖼️ Fast PIL crop completed: {region_pil.size}")
+        
+        # region_pilもRGBAの場合はRGBに変換
+        if region_pil.mode == 'RGBA':
+            rgb_pil = Image.new('RGB', region_pil.size, (255, 255, 255))
+            rgb_pil.paste(region_pil, mask=region_pil.split()[3])
+            region_pil = rgb_pil
+            print(f"Converted cropped region from RGBA to RGB")
 
         # **NumPy最適化変換**
         hidden_img = optimize_image_for_processing(np.array(region_pil))
@@ -1060,6 +1077,9 @@ def process_hidden_image(
         # **高速リサイズ処理**
         base_fixed = resize_to_fixed_size(base_img, method=resize_method)
         base_fixed_array = optimize_image_for_processing(np.array(base_fixed))
+        
+        # メモリ解放
+        base_img.close()
 
         del base_img, region_pil
         clear_memory()
@@ -1140,13 +1160,19 @@ def process_hidden_image(
         if shape_type != "rectangle":
             print(f"🎭 Creating shape mask: {shape_type}")
             
-            # 形状パラメータの準備
-            if shape_params is None:
-                shape_params = {}
+            # 形状パラメータの準備（JSON文字列から辞書へ）
+            try:
+                if isinstance(shape_params, str):
+                    shape_params_dict = json.loads(shape_params) if shape_params else {}
+                else:
+                    shape_params_dict = shape_params or {}
+            except json.JSONDecodeError as e:
+                print(f"⚠️ Error parsing shape params: {e}")
+                shape_params_dict = {}
             
             # 形状マスクの生成
             shape_mask = create_custom_shape_mask(
-                width_fixed, height_fixed, shape_type, **shape_params
+                width_fixed, height_fixed, shape_type, **shape_params_dict
             )
             print(f"Shape mask created: {shape_mask.shape}")
             
