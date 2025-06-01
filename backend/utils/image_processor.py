@@ -1233,8 +1233,48 @@ def process_hidden_image(
         
         result_fixed = base_fixed_array.copy()
         
-        # 領域置換（ベクトル化）
-        result_fixed[y_fixed:y_fixed + height_fixed, x_fixed:x_fixed + width_fixed] = stripe_pattern
+        # **形状マスクを考慮した合成処理**
+        if shape_type != "rectangle":
+            print(f"🎭 Applying shape-aware composition for {shape_type}")
+            
+            # 元の領域を取得
+            original_region = result_fixed[y_fixed:y_fixed + height_fixed, x_fixed:x_fixed + width_fixed].copy()
+            
+            # 形状マスクを再生成（合成用）
+            if shape_type != "rectangle":
+                try:
+                    if isinstance(shape_params, str):
+                        if not shape_params.strip():
+                            shape_params_dict = {}
+                        else:
+                            shape_params_dict = json.loads(shape_params)
+                    else:
+                        shape_params_dict = shape_params or {}
+                except json.JSONDecodeError:
+                    shape_params_dict = {}
+                
+                composition_mask = create_custom_shape_mask(
+                    width_fixed, height_fixed, shape_type, **shape_params_dict
+                )
+                
+                # 3チャンネル用のマスクを作成
+                if len(original_region.shape) == 3:
+                    composition_mask_3d = np.stack([composition_mask, composition_mask, composition_mask], axis=2) / 255.0
+                else:
+                    composition_mask_3d = composition_mask / 255.0
+                
+                # マスクを使った合成: マスク部分はstripe_pattern、それ以外はoriginal
+                combined_region = (stripe_pattern * composition_mask_3d +
+                                 original_region * (1.0 - composition_mask_3d)).astype(np.uint8)
+                
+                result_fixed[y_fixed:y_fixed + height_fixed, x_fixed:x_fixed + width_fixed] = combined_region
+                print(f"✅ Shape-aware composition completed")
+            else:
+                # 四角形の場合は従来通り
+                result_fixed[y_fixed:y_fixed + height_fixed, x_fixed:x_fixed + width_fixed] = stripe_pattern
+        else:
+            # 四角形の場合は従来通りの領域置換
+            result_fixed[y_fixed:y_fixed + height_fixed, x_fixed:x_fixed + width_fixed] = stripe_pattern
         
         # 枠追加（最適化版）
         if add_border:
