@@ -211,29 +211,41 @@ def create_custom_shape_mask(width: int, height: int, shape_type: str, **params)
     
     try:
         if shape_type == "circle":
-            return create_circle_mask(width, height, **params)
+            # center_x, center_y, radiusのみを渡す
+            filtered_params = {k: v for k, v in params.items() if k in ['center_x', 'center_y', 'radius']}
+            return create_circle_mask(width, height, **filtered_params)
         elif shape_type == "star":
-            result = create_star_mask(width, height, **params)
+            # num_points, inner_radius_ratio, rotationのみを渡す
+            filtered_params = {k: v for k, v in params.items() if k in ['num_points', 'inner_radius_ratio', 'rotation']}
+            result = create_star_mask(width, height, **filtered_params)
             # 星形は中程度の複雑さ - 大きいサイズの場合のみ注意
             if large_mask and memory_mb > MEMORY_WARNING_THRESHOLD * 0.5:
                 clear_shape_cache("star")
             return result
         elif shape_type == "heart":
-            result = create_heart_mask(width, height, **params)
+            # size_factorのみを渡す
+            filtered_params = {k: v for k, v in params.items() if k in ['size_factor']}
+            result = create_heart_mask(width, height, **filtered_params)
             # ハート形も中程度の複雑さ - 大きいサイズの場合のみ注意
             if large_mask and memory_mb > MEMORY_WARNING_THRESHOLD * 0.5:
                 clear_shape_cache("heart")
             return result
         elif shape_type == "hexagon":
-            return create_hexagon_mask(width, height, **params)
+            # size_factorのみを渡す
+            filtered_params = {k: v for k, v in params.items() if k in ['size_factor']}
+            return create_hexagon_mask(width, height, **filtered_params)
         elif shape_type == "japanese":
-            result = create_traditional_japanese_mask(width, height, **params)
+            # pattern_typeのみを渡す
+            filtered_params = {k: v for k, v in params.items() if k in ['pattern_type']}
+            result = create_traditional_japanese_mask(width, height, **filtered_params)
             # 和柄は複雑 - 使用後にキャッシュをクリア
             if memory_mb > MEMORY_WARNING_THRESHOLD * 0.3:
                 clear_shape_cache("japanese")
             return result
         elif shape_type == "arabesque":
-            result = create_arabesque_mask(width, height, **params)
+            # complexityのみを渡す
+            filtered_params = {k: v for k, v in params.items() if k in ['complexity']}
+            result = create_arabesque_mask(width, height, **filtered_params)
             # アラベスクは最も複雑 - 必ず使用後にキャッシュをクリア
             clear_shape_cache("arabesque")
             return result
