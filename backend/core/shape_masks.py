@@ -125,22 +125,25 @@ def create_hexagon_mask(width: int, height: int, size_factor: float = 0.8) -> np
     return mask
 
 @lru_cache(maxsize=CACHE_SIZE)
-def create_traditional_japanese_mask(width: int, height: int, pattern_type: str = "sakura") -> np.ndarray:
+def create_traditional_japanese_mask(width: int, height: int, pattern_type: str = "sakura", rotation: float = 0.0) -> np.ndarray:
     """和柄マスクの生成（桜、麻の葉、青海波）"""
     mask = np.zeros((height, width), dtype=np.uint8)
     center_x, center_y = width / 2, height / 2
+    
+    # 回転角度をラジアンに変換
+    rotation_rad = math.radians(rotation)
     
     if pattern_type == "sakura":
         # 桜の花びら（5枚の楕円組み合わせ）
         petal_radius = min(width, height) / 2 * 0.3
         for i in range(5):
-            angle = i * 2 * math.pi / 5
+            angle = i * 2 * math.pi / 5 + rotation_rad
             petal_x = center_x + petal_radius * 0.6 * math.cos(angle)
             petal_y = center_y + petal_radius * 0.6 * math.sin(angle)
             
             # 楕円の花びら描画
             axes = (int(petal_radius * 0.8), int(petal_radius * 0.4))
-            cv2.ellipse(mask, (int(petal_x), int(petal_y)), axes, 
+            cv2.ellipse(mask, (int(petal_x), int(petal_y)), axes,
                        math.degrees(angle), 0, 360, 255, -1)
     
     elif pattern_type == "asanoha":
@@ -170,11 +173,14 @@ def create_traditional_japanese_mask(width: int, height: int, pattern_type: str 
     return mask
 
 @lru_cache(maxsize=CACHE_SIZE)
-def create_arabesque_mask(width: int, height: int, complexity: int = 3) -> np.ndarray:
+def create_arabesque_mask(width: int, height: int, complexity: int = 3, rotation: float = 0.0) -> np.ndarray:
     """アラベスク柄マスクの生成（幾何学模様）"""
     mask = np.zeros((height, width), dtype=np.uint8)
     center_x, center_y = width / 2, height / 2
     base_radius = min(width, height) / 2 * 0.8
+    
+    # 回転角度をラジアンに変換
+    rotation_rad = math.radians(rotation)
     
     # フラクタル的なパターン生成
     for level in range(complexity):
@@ -182,7 +188,7 @@ def create_arabesque_mask(width: int, height: int, complexity: int = 3) -> np.nd
         points = 8 * (level + 1)
         
         for i in range(points):
-            angle = i * 2 * math.pi / points
+            angle = i * 2 * math.pi / points + rotation_rad
             x = center_x + radius * math.cos(angle)
             y = center_y + radius * math.sin(angle)
             
@@ -193,7 +199,7 @@ def create_arabesque_mask(width: int, height: int, complexity: int = 3) -> np.nd
                 inner_x = x + inner_radius * math.cos(inner_angle)
                 inner_y = y + inner_radius * math.sin(inner_angle)
                 
-                cv2.circle(mask, (int(inner_x), int(inner_y)), 
+                cv2.circle(mask, (int(inner_x), int(inner_y)),
                           max(1, int(inner_radius * 0.2)), 255, -1)
     
     # 中心部の装飾
@@ -305,6 +311,12 @@ def create_custom_shape_mask(width: int, height: int, shape_type: str, **params)
                 japanese_params['pattern_type'] = str(params['pattern_type'])
             else:
                 japanese_params['pattern_type'] = 'sakura'  # デフォルト値
+            
+            if 'rotation' in params:
+                japanese_params['rotation'] = float(params['rotation'])
+            else:
+                japanese_params['rotation'] = 0.0  # デフォルト値
+                
             print(f"🌸 Japanese mask parameters: {japanese_params}")
             result = create_traditional_japanese_mask(width, height, **japanese_params)
             # 和柄は複雑 - 使用後にキャッシュをクリア
@@ -316,9 +328,17 @@ def create_custom_shape_mask(width: int, height: int, shape_type: str, **params)
             # フロントエンドからのパラメータをマッピング
             arabesque_params = {}
             if 'complexity' in params:
-                arabesque_params['complexity'] = float(params['complexity'])
+                complexity_val = float(params['complexity'])
+                # complexityを1-10の整数に変換（0.0-1.0の範囲を想定）
+                arabesque_params['complexity'] = max(1, min(10, int(complexity_val * 10)))
             else:
-                arabesque_params['complexity'] = 0.5  # デフォルト値
+                arabesque_params['complexity'] = 3  # デフォルト値（整数）
+            
+            if 'rotation' in params:
+                arabesque_params['rotation'] = float(params['rotation'])
+            else:
+                arabesque_params['rotation'] = 0.0  # デフォルト値
+                
             print(f"🌿 Arabesque mask parameters: {arabesque_params}")
             result = create_arabesque_mask(width, height, **arabesque_params)
             # アラベスクは最も複雑 - 必ず使用後にキャッシュをクリア
