@@ -357,14 +357,48 @@ def process_hidden_image_optimized(
         
         result_fixed = base_fixed_array.copy()
         
-        # 領域置換
-        result_fixed[y_fixed:y_fixed + height_fixed, x_fixed:x_fixed + width_fixed] = stripe_pattern
+        # 形状対応合成
+        if shape_type != "rectangle":
+            print(f"🎨 Applying shape-aware composition for {shape_type}")
+            
+            # 形状マスクを再生成（最終合成用）
+            composition_mask = create_custom_shape_mask(
+                width_fixed, height_fixed, shape_type, **shape_params_dict
+            )
+            
+            # 合成用マスクを正規化 (0-1の範囲)
+            if len(stripe_pattern.shape) == 3:  # カラー画像
+                mask_3d = np.stack([composition_mask, composition_mask, composition_mask], axis=2) / 255.0
+                
+                # 形状内のみパターンを適用、形状外は元画像を保持
+                region_original = result_fixed[y_fixed:y_fixed + height_fixed, x_fixed:x_fixed + width_fixed].copy()
+                blended_region = stripe_pattern * mask_3d + region_original * (1 - mask_3d)
+                result_fixed[y_fixed:y_fixed + height_fixed, x_fixed:x_fixed + width_fixed] = blended_region.astype(np.uint8)
+                
+                # メモリ解放
+                del mask_3d, region_original, blended_region
+            else:  # グレースケール
+                mask_normalized = composition_mask / 255.0
+                region_original = result_fixed[y_fixed:y_fixed + height_fixed, x_fixed:x_fixed + width_fixed].copy()
+                blended_region = stripe_pattern * mask_normalized + region_original * (1 - mask_normalized)
+                result_fixed[y_fixed:y_fixed + height_fixed, x_fixed:x_fixed + width_fixed] = blended_region.astype(np.uint8)
+                
+                # メモリ解放
+                del mask_normalized, region_original, blended_region
+            
+            # 合成マスクのメモリを解放
+            del composition_mask
+            print(f"✅ Shape-aware composition completed")
+        else:
+            # 矩形の場合は従来通りの置換
+            result_fixed[y_fixed:y_fixed + height_fixed, x_fixed:x_fixed + width_fixed] = stripe_pattern
+            print(f"✅ Rectangle composition completed")
         
         # 枠追加
         if add_border:
             result_fixed = add_black_border(
-                result_fixed, 
-                (x_fixed, y_fixed, width_fixed, height_fixed), 
+                result_fixed,
+                (x_fixed, y_fixed, width_fixed, height_fixed),
                 border_width
             )
         
@@ -466,3 +500,4 @@ def process_hidden_image_optimized(
 
 # 後方互換性のためのエイリアス（この関数は使用されていません）
 # process_hidden_image_optimized = process_hidden_image
+
