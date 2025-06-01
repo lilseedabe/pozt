@@ -52,9 +52,13 @@ def create_circle_mask(width: int, height: int, center_x: Optional[float] = None
 @lru_cache(maxsize=CACHE_SIZE)
 def create_star_mask(width: int, height: int, num_points: int = 5, inner_radius_ratio: float = 0.4, rotation: float = 0) -> np.ndarray:
     """星形マスクの高速生成（ベクトル化）"""
+    print(f"⭐ Creating star mask: {width}x{height}, points={num_points}, inner_ratio={inner_radius_ratio}, rotation={rotation}")
+    
     center_x, center_y = width / 2, height / 2
     outer_radius = min(width, height) / 2 * 0.8
     inner_radius = outer_radius * inner_radius_ratio
+    
+    print(f"⭐ Star geometry: center=({center_x:.1f}, {center_y:.1f}), outer_radius={outer_radius:.1f}, inner_radius={inner_radius:.1f}")
     
     # 角度配列の事前計算
     angle_step = 2 * math.pi / num_points
@@ -65,10 +69,18 @@ def create_star_mask(width: int, height: int, num_points: int = 5, inner_radius_
     star_x = center_x + radii * np.cos(angles)
     star_y = center_y + radii * np.sin(angles)
     
+    print(f"⭐ Star points: {len(star_x)} points generated")
+    
     # OpenCVによる高速ポリゴン描画
     mask = np.zeros((height, width), dtype=np.uint8)
     points = np.column_stack((star_x, star_y)).astype(np.int32)
     cv2.fillPoly(mask, [points], 255)
+    
+    # マスクの統計情報をログ出力
+    white_pixels = np.sum(mask == 255)
+    total_pixels = width * height
+    coverage = (white_pixels / total_pixels) * 100
+    print(f"⭐ Star mask created: {white_pixels}/{total_pixels} pixels ({coverage:.1f}% coverage)")
     
     return mask
 
@@ -215,37 +227,100 @@ def create_custom_shape_mask(width: int, height: int, shape_type: str, **params)
             filtered_params = {k: v for k, v in params.items() if k in ['center_x', 'center_y', 'radius']}
             return create_circle_mask(width, height, **filtered_params)
         elif shape_type == "star":
-            # num_points, inner_radius_ratio, rotationのみを渡す
-            filtered_params = {k: v for k, v in params.items() if k in ['num_points', 'inner_radius_ratio', 'rotation']}
-            result = create_star_mask(width, height, **filtered_params)
+            # フロントエンドからのパラメータ名をバックエンド形式にマッピング
+            star_params = {}
+            if 'points' in params:
+                star_params['num_points'] = int(params['points'])
+            elif 'num_points' in params:
+                star_params['num_points'] = int(params['num_points'])
+            else:
+                star_params['num_points'] = 5  # デフォルト値
+                
+            if 'innerRadius' in params:
+                star_params['inner_radius_ratio'] = float(params['innerRadius'])
+            elif 'inner_radius_ratio' in params:
+                star_params['inner_radius_ratio'] = float(params['inner_radius_ratio'])
+            else:
+                star_params['inner_radius_ratio'] = 0.4  # デフォルト値
+                
+            if 'rotation' in params:
+                star_params['rotation'] = float(params['rotation'])
+            else:
+                star_params['rotation'] = 0.0  # デフォルト値
+            
+            print(f"🌟 Star mask parameters received: {params}")
+            print(f"🌟 Star mask mapped parameters: {star_params}")
+            
+            result = create_star_mask(width, height, **star_params)
+            print(f"🌟 Star mask created successfully with shape: {result.shape}")
+            
             # 星形は中程度の複雑さ - 大きいサイズの場合のみ注意
             if large_mask and memory_mb > MEMORY_WARNING_THRESHOLD * 0.5:
                 clear_shape_cache("star")
             return result
         elif shape_type == "heart":
-            # size_factorのみを渡す
-            filtered_params = {k: v for k, v in params.items() if k in ['size_factor']}
-            result = create_heart_mask(width, height, **filtered_params)
+            # フロントエンドからのパラメータをマッピング
+            heart_params = {}
+            if 'size' in params:
+                heart_params['size_factor'] = float(params['size'])
+            elif 'size_factor' in params:
+                heart_params['size_factor'] = float(params['size_factor'])
+            else:
+                heart_params['size_factor'] = 0.8  # デフォルト値
+                
+            print(f"💖 Heart mask parameters: {heart_params}")
+            result = create_heart_mask(width, height, **heart_params)
             # ハート形も中程度の複雑さ - 大きいサイズの場合のみ注意
             if large_mask and memory_mb > MEMORY_WARNING_THRESHOLD * 0.5:
                 clear_shape_cache("heart")
             return result
+            
+        elif shape_type == "circle":
+            # フロントエンドからのパラメータをマッピング
+            circle_params = {}
+            if 'size' in params:
+                radius = min(width, height) / 2 * float(params['size'])
+                circle_params['radius'] = radius
+            print(f"⭕ Circle mask parameters: {circle_params}")
+            return create_circle_mask(width, height, **circle_params)
+            
         elif shape_type == "hexagon":
-            # size_factorのみを渡す
-            filtered_params = {k: v for k, v in params.items() if k in ['size_factor']}
-            return create_hexagon_mask(width, height, **filtered_params)
+            # フロントエンドからのパラメータをマッピング
+            hex_params = {}
+            if 'size' in params:
+                hex_params['size_factor'] = float(params['size'])
+            elif 'size_factor' in params:
+                hex_params['size_factor'] = float(params['size_factor'])
+            else:
+                hex_params['size_factor'] = 0.8  # デフォルト値
+            print(f"🔷 Hexagon mask parameters: {hex_params}")
+            return create_hexagon_mask(width, height, **hex_params)
+            
         elif shape_type == "japanese":
-            # pattern_typeのみを渡す
-            filtered_params = {k: v for k, v in params.items() if k in ['pattern_type']}
-            result = create_traditional_japanese_mask(width, height, **filtered_params)
+            # フロントエンドからのパラメータをマッピング
+            japanese_params = {}
+            if 'pattern' in params:
+                japanese_params['pattern_type'] = str(params['pattern'])
+            elif 'pattern_type' in params:
+                japanese_params['pattern_type'] = str(params['pattern_type'])
+            else:
+                japanese_params['pattern_type'] = 'sakura'  # デフォルト値
+            print(f"🌸 Japanese mask parameters: {japanese_params}")
+            result = create_traditional_japanese_mask(width, height, **japanese_params)
             # 和柄は複雑 - 使用後にキャッシュをクリア
             if memory_mb > MEMORY_WARNING_THRESHOLD * 0.3:
                 clear_shape_cache("japanese")
             return result
+            
         elif shape_type == "arabesque":
-            # complexityのみを渡す
-            filtered_params = {k: v for k, v in params.items() if k in ['complexity']}
-            result = create_arabesque_mask(width, height, **filtered_params)
+            # フロントエンドからのパラメータをマッピング
+            arabesque_params = {}
+            if 'complexity' in params:
+                arabesque_params['complexity'] = float(params['complexity'])
+            else:
+                arabesque_params['complexity'] = 0.5  # デフォルト値
+            print(f"🌿 Arabesque mask parameters: {arabesque_params}")
+            result = create_arabesque_mask(width, height, **arabesque_params)
             # アラベスクは最も複雑 - 必ず使用後にキャッシュをクリア
             clear_shape_cache("arabesque")
             return result
