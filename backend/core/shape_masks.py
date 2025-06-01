@@ -29,7 +29,7 @@ MEMORY_WARNING_THRESHOLD = 100  # MB
 COMPLEXITY_THRESHOLD = 4  # この値以上の複雑さでキャッシュ管理を厳格化
 
 @lru_cache(maxsize=CACHE_SIZE)
-def create_circle_mask(width: int, height: int, center_x: Optional[float] = None, center_y: Optional[float] = None, radius: Optional[float] = None) -> np.ndarray:
+def create_circle_mask(width: int, height: int, center_x: Optional[float] = None, center_y: Optional[float] = None, radius: Optional[float] = None, rotation: float = 0.0) -> np.ndarray:
     """円形マスクの高速生成（ベクトル化）"""
     if center_x is None:
         center_x = width / 2
@@ -42,6 +42,7 @@ def create_circle_mask(width: int, height: int, center_x: Optional[float] = None
     y_indices, x_indices = np.ogrid[:height, :width]
     
     # 距離計算（ベクトル化）
+    # 注：円形は回転しても見た目は変わらないが、一貫性のためrotationパラメータを受け取る
     distances = np.sqrt((x_indices - center_x) ** 2 + (y_indices - center_y) ** 2)
     
     # マスク生成（Boolean配列で省メモリ）
@@ -85,7 +86,7 @@ def create_star_mask(width: int, height: int, num_points: int = 5, inner_radius_
     return mask
 
 @lru_cache(maxsize=CACHE_SIZE)
-def create_heart_mask(width: int, height: int, size_factor: float = 0.8) -> np.ndarray:
+def create_heart_mask(width: int, height: int, size_factor: float = 0.8, rotation: float = 0.0) -> np.ndarray:
     """ハート形マスクの高速生成（数学関数）"""
     center_x, center_y = width / 2, height / 2
     scale = min(width, height) / 2 * size_factor
@@ -93,12 +94,26 @@ def create_heart_mask(width: int, height: int, size_factor: float = 0.8) -> np.n
     # メッシュグリッド生成
     y_indices, x_indices = np.ogrid[:height, :width]
     
-    # 正規化座標
-    x_norm = (x_indices - center_x) / scale
-    y_norm = (y_indices - center_y) / scale
+    # 回転を適用した正規化座標
+    if rotation != 0.0:
+        rotation_rad = math.radians(rotation)
+        cos_r = math.cos(rotation_rad)
+        sin_r = math.sin(rotation_rad)
+        
+        # 回転変換
+        x_centered = x_indices - center_x
+        y_centered = y_indices - center_y
+        x_rotated = x_centered * cos_r - y_centered * sin_r
+        y_rotated = x_centered * sin_r + y_centered * cos_r
+        
+        x_norm = x_rotated / scale
+        y_norm = y_rotated / scale
+    else:
+        # 回転なしの場合
+        x_norm = (x_indices - center_x) / scale
+        y_norm = (y_indices - center_y) / scale
     
     # ハート方程式: (x^2 + y^2 - 1)^3 - x^2 * y^3 <= 0
-    # 回転と調整を加えた最適化版
     heart_eq = (x_norm**2 + y_norm**2 - 1)**3 - x_norm**2 * y_norm**3
     
     # マスク生成
@@ -107,13 +122,14 @@ def create_heart_mask(width: int, height: int, size_factor: float = 0.8) -> np.n
     return mask
 
 @lru_cache(maxsize=CACHE_SIZE)
-def create_hexagon_mask(width: int, height: int, size_factor: float = 0.8) -> np.ndarray:
+def create_hexagon_mask(width: int, height: int, size_factor: float = 0.8, rotation: float = 0.0) -> np.ndarray:
     """六角形マスクの高速生成"""
     center_x, center_y = width / 2, height / 2
     radius = min(width, height) / 2 * size_factor
     
-    # 六角形の頂点計算
-    angles = np.arange(6) * math.pi / 3
+    # 六角形の頂点計算（回転を考慮）
+    rotation_rad = math.radians(rotation)
+    angles = np.arange(6) * math.pi / 3 + rotation_rad
     hex_x = center_x + radius * np.cos(angles)
     hex_y = center_y + radius * np.sin(angles)
     
@@ -273,7 +289,12 @@ def create_custom_shape_mask(width: int, height: int, shape_type: str, **params)
                 heart_params['size_factor'] = float(params['size_factor'])
             else:
                 heart_params['size_factor'] = 0.8  # デフォルト値
-                
+            
+            if 'rotation' in params:
+                heart_params['rotation'] = float(params['rotation'])
+            else:
+                heart_params['rotation'] = 0.0  # デフォルト値
+
             print(f"💖 Heart mask parameters: {heart_params}")
             result = create_heart_mask(width, height, **heart_params)
             # ハート形も中程度の複雑さ - 大きいサイズの場合のみ注意
@@ -287,6 +308,12 @@ def create_custom_shape_mask(width: int, height: int, shape_type: str, **params)
             if 'size' in params:
                 radius = min(width, height) / 2 * float(params['size'])
                 circle_params['radius'] = radius
+            
+            if 'rotation' in params:
+                circle_params['rotation'] = float(params['rotation'])
+            else:
+                circle_params['rotation'] = 0.0  # デフォルト値
+                
             print(f"⭕ Circle mask parameters: {circle_params}")
             return create_circle_mask(width, height, **circle_params)
             
@@ -299,6 +326,12 @@ def create_custom_shape_mask(width: int, height: int, shape_type: str, **params)
                 hex_params['size_factor'] = float(params['size_factor'])
             else:
                 hex_params['size_factor'] = 0.8  # デフォルト値
+            
+            if 'rotation' in params:
+                hex_params['rotation'] = float(params['rotation'])
+            else:
+                hex_params['rotation'] = 0.0  # デフォルト値
+                
             print(f"🔷 Hexagon mask parameters: {hex_params}")
             return create_hexagon_mask(width, height, **hex_params)
             
