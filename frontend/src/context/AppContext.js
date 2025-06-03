@@ -15,12 +15,12 @@ const initialState = {
     // 最適化されたデフォルト値
     strength: 0.02,
     opacity: 0.7,           // 0.6 → 0.0 に変更（最適化）
-    enhancementFactor: 1.2,
+    enhancementFactor: 1.5,
     frequency: 1,
     blurRadius: 0,          // 5 → 0 に変更（最適化）
-    contrastBoost: 1.0,
+    contrastBoost: 1.3,
     colorShift: 0.0,
-    sharpnessBoost: 0.0,    // 新しいパラメータを追加
+    sharpnessBoost: 0.3,    // 新しいパラメータを追加
     // 形状選択パラメータ
     shapeType: 'rectangle', // デフォルトは四角形
     shapeParams: {          // 形状固有のパラメータ
