@@ -1,6 +1,6 @@
 """
-最適化された画像処理モジュール - メモリ使用量最適化版
-形状マスク・カラー設定に対応し、512MB環境でも安定動作
+最適化された画像処理モジュール - メモリ使用量最適化版（濃淡詳細表現対応）
+形状マスク・カラー設定・濃淡詳細表現に対応し、512MB環境でも安定動作
 """
 import numpy as np
 import cv2
@@ -25,6 +25,20 @@ from core.shape_masks import (
     clear_shape_cache,
     SHAPE_COMPLEXITY
 )
+# 新しい濃淡詳細表現機能をインポート
+from patterns.base import create_gradation_stripe_base, create_enhanced_gradation_stripe, hex_to_rgb
+from patterns.moire import (
+    create_high_frequency_moire_stripes, 
+    create_moire_hidden_stripes, 
+    create_adaptive_moire_stripes,
+    create_perfect_moire_pattern
+)
+from patterns.overlay import create_overlay_moire_pattern
+from patterns.color_modes import (
+    create_color_preserving_moire_stripes,
+    create_hue_preserving_moire,
+    create_blended_moire_stripes
+)
 
 def process_hidden_image_optimized(
     base_img_path: str,
@@ -42,18 +56,18 @@ def process_hidden_image_optimized(
     shape_params: str = "{}"         # 形状パラメータ（JSON文字列）
 ):
     """
-    メモリ最適化された画像処理関数 - 複雑な形状や大きな画像でも512MBで安定動作
+    メモリ最適化された画像処理関数 - 濃淡詳細表現対応、複雑な形状や大きな画像でも512MBで安定動作
     
     Args:
         base_img_path: 元画像のパス
         region: 処理領域 (x, y, width, height)
         pattern_type: パターンタイプ ('horizontal' or 'vertical')
-        stripe_method: 縞模様メソッド
+        stripe_method: 縞模様メソッド（濃淡詳細表現対応）
         resize_method: リサイズメソッド
         add_border: 枠を追加するかどうか
         border_width: 枠の幅
         overlay_ratio: オーバーレイ比率
-        processing_params: 処理パラメータ辞書
+        processing_params: 処理パラメータ辞書（濃淡詳細表現パラメータ含む）
         stripe_color1: 縞色1（HEX形式）
         stripe_color2: 縞色2（HEX形式）
         shape_type: 形状タイプ
@@ -67,37 +81,40 @@ def process_hidden_image_optimized(
     start_memory = process.memory_info().rss / (1024 * 1024)  # MB単位
     print(f"🧠 Starting memory usage: {start_memory:.2f} MB")
     
-    # 最適化されたデフォルトパラメータ設定
+    # 濃淡詳細表現対応の最適化されたデフォルトパラメータ設定
     if processing_params is None:
         processing_params = {
-            'strength': 0.02,
+            'strength': 0.035,               # 濃淡表現用に最適化
             'opacity': 0.0,                  # 最適化：完全透明
-            'enhancement_factor': 1.2,
+            'enhancement_factor': 1.8,       # 詳細強調係数
             'frequency': 1,
             'blur_radius': 0,                # 最適化：ブラーなし
-            'contrast_boost': 1.0,
+            'contrast_boost': 1.5,           # コントラスト強化
             'color_shift': 0.0,
             'overlay_ratio': overlay_ratio,
-            'sharpness_boost': 0.0,          # 新パラメータ
+            'sharpness_boost': 0.4,          # シャープネス強化
             'stripe_color1': stripe_color1,  # 縞模様カラー1
             'stripe_color2': stripe_color2   # 縞模様カラー2
         }
     else:
-        # 必要なパラメータの設定
+        # 必要なパラメータの設定（濃淡詳細表現対応）
         processing_params['overlay_ratio'] = overlay_ratio
         processing_params.setdefault('opacity', 0.0)
         processing_params.setdefault('blur_radius', 0)
-        processing_params.setdefault('sharpness_boost', 0.0)
+        processing_params.setdefault('sharpness_boost', 0.4)
+        processing_params.setdefault('enhancement_factor', 1.8)
+        processing_params.setdefault('contrast_boost', 1.5)
         processing_params['stripe_color1'] = stripe_color1
         processing_params['stripe_color2'] = stripe_color2
     
     start_time = time.time()
     settings = get_settings()
 
-    print(f"🚀 Starting memory-optimized processing...")
+    print(f"🎨 Starting memory-optimized gradation processing...")
     print(f"Parameters: {pattern_type}, {stripe_method}, {resize_method}, shape_type={shape_type}")
     print(f"Region: {region}")
     print(f"Colors: {stripe_color1} - {stripe_color2}")
+    print(f"🆕 Gradation mode: {stripe_method.startswith('gradation_')}")
 
     try:
         # === フェーズ1: 画像読み込みとリサイズ ===
@@ -233,6 +250,7 @@ def process_hidden_image_optimized(
         phase_start = time.time()
         
         # 形状マスク生成（矩形以外の場合）
+        shape_params_dict = {}
         if shape_type != "rectangle":
             print(f"🎭 Creating shape mask: {shape_type}")
             
@@ -312,24 +330,89 @@ def process_hidden_image_optimized(
                 clear_shape_cache(shape_type)
                 print(f"Cleared shape cache for '{shape_type}'")
         
-        # パターン生成
-        stripe_pattern = vectorized_pattern_generation(
-            hidden_array, pattern_type, stripe_method, processing_params
-        )
+        # 🎨 濃淡詳細表現パターン生成
+        print(f"🎨 Generating gradation pattern with method: {stripe_method}")
+        
+        # パラメータ取得
+        strength = processing_params.get('strength', 0.02)
+        enhancement_factor = processing_params.get('enhancement_factor', 1.2)
+        contrast_boost = processing_params.get('contrast_boost', 1.0)
+        sharpness_boost = processing_params.get('sharpness_boost', 0.0)
+        
+        # 濃淡詳細表現メソッドの処理
+        if stripe_method == "gradation_basic":
+            print("🆕 Using basic gradation stripe pattern")
+            stripe_pattern = create_gradation_stripe_base(
+                hidden_array, pattern_type, stripe_color1, stripe_color2, 
+                detail_strength=0.8
+            )
+        elif stripe_method == "gradation_enhanced":
+            print("🆕 Using enhanced gradation stripe pattern")
+            stripe_pattern = create_enhanced_gradation_stripe(
+                hidden_array, pattern_type, stripe_color1, stripe_color2,
+                detail_strength=0.8, contrast_boost=contrast_boost
+            )
+        elif stripe_method == "high_frequency":
+            print("🔧 Using high frequency pattern (gradation mode)")
+            stripe_pattern = create_high_frequency_moire_stripes(
+                hidden_array, pattern_type, strength, stripe_color1, stripe_color2
+            )
+        elif stripe_method == "moire_pattern":
+            print("🔧 Using perfect moire pattern (gradation mode)")
+            stripe_pattern = create_perfect_moire_pattern(
+                hidden_array, pattern_type, stripe_color1, stripe_color2
+            )
+        elif stripe_method in ["adaptive", "adaptive_subtle", "adaptive_strong", "adaptive_minimal",
+                               "perfect_subtle", "ultra_subtle", "near_perfect"]:
+            print(f"🔧 Using adaptive pattern: {stripe_method} (gradation mode)")
+            stripe_pattern = create_adaptive_moire_stripes(
+                hidden_array, pattern_type, stripe_method, stripe_color1, stripe_color2
+            )
+        elif stripe_method == "color_preserving":
+            print("🔧 Using color preserving mode")
+            # 領域情報を再構築
+            region_final = (x_fixed, y_fixed, width_fixed, height_fixed)
+            stripe_pattern = create_color_preserving_moire_stripes(
+                hidden_array, base_fixed_array, region_final, pattern_type, strength
+            )
+        elif stripe_method == "hue_preserving":
+            print("🔧 Using hue preserving mode")
+            region_final = (x_fixed, y_fixed, width_fixed, height_fixed)
+            stripe_pattern = create_hue_preserving_moire(
+                hidden_array, base_fixed_array, region_final, pattern_type, strength
+            )
+        elif stripe_method == "blended":
+            print("🔧 Using blended mode")
+            opacity = processing_params.get('opacity', 0.85)
+            region_final = (x_fixed, y_fixed, width_fixed, height_fixed)
+            stripe_pattern = create_blended_moire_stripes(
+                hidden_array, base_fixed_array, region_final, pattern_type, strength, opacity
+            )
+        else:  # overlay (default) - 濃淡対応版
+            print("🔧 Using overlay pattern (gradation mode)")
+            opacity = processing_params.get('opacity', 0.6)
+            stripe_pattern = create_overlay_moire_pattern(
+                hidden_array, pattern_type, opacity, stripe_color1, stripe_color2
+            )
+        
+        # シャープネス強化の適用
+        if sharpness_boost > 0:
+            print(f"🔧 Applying sharpness boost: {sharpness_boost}")
+            stripe_pattern = apply_sharpness_boost(stripe_pattern, sharpness_boost)
         
         # パターンがRGBAの場合はRGBに変換
         if len(stripe_pattern.shape) == 3 and stripe_pattern.shape[2] == 4:
             print(f"⚠️ Stripe pattern is RGBA: {stripe_pattern.shape}, converting to RGB")
             stripe_pattern = stripe_pattern[:, :, :3]
         
-        print(f"Stripe pattern shape: {stripe_pattern.shape}")
+        print(f"✨ Gradation stripe pattern shape: {stripe_pattern.shape}")
         
         # 不要メモリ解放
         del hidden_array
         clear_memory()
 
         phase_time = time.time() - phase_start
-        print(f"⚡ Phase 4 (Shape mask + Pattern): {phase_time:.2f}s")
+        print(f"⚡ Phase 4 (Shape mask + Gradation Pattern): {phase_time:.2f}s")
         
         # メモリ使用状況チェック
         current_memory = process.memory_info().rss / (1024 * 1024)
@@ -353,7 +436,7 @@ def process_hidden_image_optimized(
             base_fixed_array = base_fixed_array[:, :, :3]
         
         print(f"Base fixed array shape: {base_fixed_array.shape}")
-        print(f"Stripe pattern shape for replacement: {stripe_pattern.shape}")
+        print(f"Gradation stripe pattern shape for replacement: {stripe_pattern.shape}")
         
         result_fixed = base_fixed_array.copy()
         
@@ -388,11 +471,11 @@ def process_hidden_image_optimized(
             
             # 合成マスクのメモリを解放
             del composition_mask
-            print(f"✅ Shape-aware composition completed")
+            print(f"✅ Shape-aware gradation composition completed")
         else:
             # 矩形の場合は従来通りの置換
             result_fixed[y_fixed:y_fixed + height_fixed, x_fixed:x_fixed + width_fixed] = stripe_pattern
-            print(f"✅ Rectangle composition completed")
+            print(f"✅ Rectangle gradation composition completed")
         
         # 枠追加
         if add_border:
@@ -407,15 +490,16 @@ def process_hidden_image_optimized(
         clear_memory()
 
         phase_time = time.time() - phase_start
-        print(f"⚡ Phase 5 (Final composition): {phase_time:.2f}s")
+        print(f"⚡ Phase 5 (Final gradation composition): {phase_time:.2f}s")
 
         # === フェーズ6: 保存 ===
         phase_start = time.time()
         
-        # ファイル名生成
+        # ファイル名生成（濃淡表現を示す）
         timestamp = int(time.time())
         result_id = uuid.uuid4().hex[:8]
-        result_filename = f"optimized_result_{result_id}_{timestamp}.png"
+        gradation_prefix = "gradation_" if stripe_method.startswith('gradation_') else "optimized_"
+        result_filename = f"{gradation_prefix}result_{result_id}_{timestamp}.png"
 
         # 保存ディレクトリ確保
         os.makedirs("static", exist_ok=True)
@@ -440,15 +524,20 @@ def process_hidden_image_optimized(
         # === 処理完了 ===
         total_time = time.time() - start_time
         final_memory = process.memory_info().rss / (1024 * 1024)
-        print(f"🎉 Memory-optimized processing completed: {total_time:.2f}s")
+        print(f"🎉 Memory-optimized gradation processing completed: {total_time:.2f}s")
         print(f"🧠 Final memory usage: {final_memory:.2f} MB (Δ{final_memory - start_memory:.2f} MB)")
 
-        # 最適化状態を記録
+        # 最適化状態を記録（濃淡詳細表現情報を含む）
         optimization_status = {
             "opacity_optimized": processing_params.get('opacity', 0.6) == 0.0,
             "blur_optimized": processing_params.get('blur_radius', 5) == 0,
             "sharpness_boost_applied": abs(processing_params.get('sharpness_boost', 0.0)) > 0.001,
-            "shape_type": shape_type
+            "gradation_mode": stripe_method.startswith('gradation_'),
+            "gradation_method": stripe_method if stripe_method.startswith('gradation_') else None,
+            "enhancement_factor": processing_params.get('enhancement_factor', 1.2),
+            "contrast_boost": processing_params.get('contrast_boost', 1.0),
+            "shape_type": shape_type,
+            "custom_colors": stripe_color1 != "#000000" or stripe_color2 != "#ffffff"
         }
 
         # 形状キャッシュを最終クリア
@@ -464,7 +553,7 @@ def process_hidden_image_optimized(
             gc.collect()
             gc.collect()
 
-        # 結果を返す
+        # 結果を返す（濃淡詳細表現情報を含む）
         result_dict = {
             "result": result_filename,
             "processing_info": {
@@ -472,14 +561,22 @@ def process_hidden_image_optimized(
                 "optimization_status": optimization_status,
                 "parameters_used": processing_params,
                 "shape_used": shape_type,
-                "memory_usage_mb": final_memory
+                "memory_usage_mb": final_memory,
+                "gradation_details": {
+                    "is_gradation_mode": stripe_method.startswith('gradation_'),
+                    "method": stripe_method,
+                    "colors_used": [stripe_color1, stripe_color2],
+                    "enhancement_applied": enhancement_factor > 1.0,
+                    "contrast_boosted": contrast_boost > 1.0,
+                    "sharpness_boosted": sharpness_boost > 0.0
+                }
             }
         }
         
         return result_dict
 
     except Exception as e:
-        print(f"❌ Memory-optimized processing error: {e}")
+        print(f"❌ Memory-optimized gradation processing error: {e}")
         import traceback
         traceback.print_exc()
         
@@ -498,6 +595,35 @@ def process_hidden_image_optimized(
         
         raise e
 
+def apply_sharpness_boost(img, boost_factor):
+    """
+    シャープネス強化を適用（濃淡詳細表現対応）
+    """
+    if boost_factor <= 0:
+        return img
+    
+    print(f"🔧 Applying sharpness boost with factor: {boost_factor}")
+    
+    # アンシャープマスクフィルタ（濃淡詳細を保持）
+    kernel = np.array([[-1, -1, -1],
+                       [-1,  9, -1],
+                       [-1, -1, -1]], dtype=np.float32)
+    
+    kernel = kernel * boost_factor
+    kernel[1, 1] = kernel[1, 1] - boost_factor + 1
+    
+    # 各チャンネルに適用
+    if len(img.shape) == 3:
+        result = np.zeros_like(img, dtype=np.float32)
+        for i in range(3):
+            result[:, :, i] = cv2.filter2D(img[:, :, i].astype(np.float32), -1, kernel)
+    else:
+        result = cv2.filter2D(img.astype(np.float32), -1, kernel)
+    
+    # 適切な範囲にクリッピング（濃淡詳細を保持）
+    result = np.clip(result, 0, 255)
+    
+    return result.astype(np.uint8)
+
 # 後方互換性のためのエイリアス（この関数は使用されていません）
 # process_hidden_image_optimized = process_hidden_image
-
