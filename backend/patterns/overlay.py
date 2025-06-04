@@ -1,88 +1,100 @@
-# patterns/overlay.py - Numpy ベクトル化による超高速化版
+# patterns/overlay.py - 濃淡詳細表現対応版
 
 import numpy as np
 import cv2
 from core.image_utils import ensure_array, get_grayscale
+from patterns.base import hex_to_rgb
 
 def create_overlay_moire_pattern(hidden_img, pattern_type="horizontal", overlay_opacity=0.6, color1="#000000", color2="#FFFFFF"):
     """
-    重ね合わせモード：完全ベクトル化による超高速化（カラー対応）
-    従来のピクセル単位ループを排除し、10-20倍高速化を実現
+    重ね合わせモード：濃淡詳細表現対応版
+    隠し画像の詳細を重ね合わせ効果で表現
     """
-    from .base import hex_to_rgb
+    if isinstance(hidden_img, np.ndarray):
+        hidden_array = hidden_img.astype(np.float32)
+    else:
+        hidden_array = np.array(hidden_img).astype(np.float32)
+    
+    height, width = hidden_array.shape[:2]
+    
+    # グレースケール変換
+    if len(hidden_array.shape) == 3:
+        hidden_gray = cv2.cvtColor(hidden_array.astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)
+    else:
+        hidden_gray = hidden_array
     
     # HEX色をRGBに変換
     color1_rgb = hex_to_rgb(color1)
     color2_rgb = hex_to_rgb(color2)
     
-    if isinstance(hidden_img, np.ndarray):
-        hidden_array = hidden_img.astype(np.float32)
-    else:
-        hidden_array = np.array(hidden_img).astype(np.float32)
-    
-    height, width = hidden_array.shape[:2]
-    
-    # グレースケール変換（ベクトル化）
-    if len(hidden_array.shape) == 3:
-        hidden_gray = cv2.cvtColor(hidden_array.astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)
-    else:
-        hidden_gray = hidden_array
-    
-    # **完全ベクトル化による前処理**
+    # 隠し画像の正規化と強調
     hidden_norm = hidden_gray / 255.0
+    hidden_enhanced = np.clip((hidden_norm - 0.5) * 1.8 + 0.5, 0, 1)
     
-    # 二値化マスク生成（OpenCV最適化）
-    _, binary_mask = cv2.threshold(hidden_gray, 100, 255, cv2.THRESH_BINARY_INV)
+    # 複数レベルの二値化マスク生成
+    _, binary_mask1 = cv2.threshold(hidden_gray, 100, 255, cv2.THRESH_BINARY_INV)
+    _, binary_mask2 = cv2.threshold(hidden_gray, 140, 255, cv2.THRESH_BINARY_INV)
     
-    # ガウシアンブラー（OpenCV最適化）
-    blurred_mask = cv2.GaussianBlur(binary_mask, (5, 5), 0)
+    # ガウシアンブラー（詳細保持のため軽い）
+    blurred_mask1 = cv2.GaussianBlur(binary_mask1, (3, 3), 0)
+    blurred_mask2 = cv2.GaussianBlur(binary_mask2, (7, 7), 0)
     
-    # マスク正規化（ベクトル化）
-    mask = (blurred_mask.astype(np.float32) / 255.0) * overlay_opacity
+    # 複合マスクの生成
+    composite_mask = (blurred_mask1.astype(np.float32) * 0.7 + blurred_mask2.astype(np.float32) * 0.3) / 255.0
+    adaptive_mask = composite_mask * overlay_opacity
     
-    # **超高速ベクトル化による縞模様生成**
+    # 縞模様パターンの生成（詳細を保持）
     if pattern_type == "horizontal":
-        # 行ベースの縞パターン生成（メモリ効率的）
         y_coords = np.arange(height, dtype=np.uint8).reshape(-1, 1)
-        stripe_pattern = (y_coords % 2)  # 0または1
+        stripe_pattern = (y_coords % 2)
         stripe_pattern = np.broadcast_to(stripe_pattern, (height, width))
-        
     else:  # vertical
-        # 列ベースの縞パターン生成（メモリ効率的）
         x_coords = np.arange(width, dtype=np.uint8).reshape(1, -1)
-        stripe_pattern = (x_coords % 2)  # 0または1
+        stripe_pattern = (x_coords % 2)
         stripe_pattern = np.broadcast_to(stripe_pattern, (height, width))
     
-    # カスタム色で縞パターン生成
+    # 詳細な濃淡縞パターンの生成
     stripes = np.zeros((height, width, 3), dtype=np.float32)
     
-    # 暗い縞の領域にcolor1を適用
+    # 暗い縞と明るい縞の領域
     dark_regions = stripe_pattern == 0
-    for i in range(3):
-        stripes[dark_regions, i] = color1_rgb[i]
-    
-    # 明るい縞の領域にcolor2を適用
     light_regions = stripe_pattern == 1
+    
+    # 隠し画像に基づく詳細な明度調整
+    brightness_modulation = 0.4 + hidden_enhanced * 0.6  # 0.4-1.0の範囲
+    
+    # 暗い縞の詳細処理
+    dark_base_values = np.array([70, 90, 110]) + hidden_enhanced * 40  # 範囲を拡大
     for i in range(3):
-        stripes[light_regions, i] = color2_rgb[i]
+        dark_value = dark_base_values[i % 3] * brightness_modulation * (color1_rgb[i] / 255.0)
+        stripes[dark_regions, i] = dark_value[dark_regions]
     
-    # **完全ベクトル化による合成処理**
-    # 均一グレー値（ベクトル化）
-    gray_value = 128.0
-    gray = np.full((height, width, 3), gray_value, dtype=np.float32)
+    # 明るい縞の詳細処理
+    light_base_values = np.array([160, 180, 200]) + hidden_enhanced * 35
+    for i in range(3):
+        light_value = light_base_values[i % 3] * brightness_modulation * (color2_rgb[i] / 255.0)
+        stripes[light_regions, i] = light_value[light_regions]
     
-    # マスクを3チャンネルに拡張（効率的）
-    mask_3d = np.stack([mask, mask, mask], axis=2)
+    # 適応的グレー値（隠し画像の詳細を反映）
+    gray_base = 100 + hidden_enhanced * 55  # 100-155の範囲
+    gray = np.zeros((height, width, 3), dtype=np.float32)
+    for i in range(3):
+        gray[:, :, i] = gray_base
     
-    # 最終合成（完全ベクトル化）
-    # mask値が大きいほどグレー、小さいほど縞模様
+    # マスクを3チャンネルに拡張
+    mask_3d = np.stack([adaptive_mask, adaptive_mask, adaptive_mask], axis=2)
+    
+    # 最終合成（詳細保持）
     result = stripes * (1.0 - mask_3d) + gray * mask_3d
+    
+    # 適切な範囲にクリッピング
+    result = np.clip(result, 30, 225)
     
     return result.astype(np.uint8)
 
 def create_enhanced_overlay_pattern(hidden_img, pattern_type="horizontal", overlay_opacity=0.6, enhancement_factor=1.2):
     """
-    強化版重ね合わせモード：コントラスト強化付きベクトル化
+    強化版重ね合わせモード：詳細コントラスト強化版
     """
     if isinstance(hidden_img, np.ndarray):
         hidden_array = hidden_img.astype(np.float32)
@@ -97,43 +109,53 @@ def create_enhanced_overlay_pattern(hidden_img, pattern_type="horizontal", overl
     else:
         hidden_gray = hidden_array
     
-    # **ベクトル化による強化処理**
-    # コントラスト強化（全画素同時処理）
+    # 強化処理（詳細を鮮明に）
     hidden_norm = hidden_gray / 255.0
-    enhanced_contrast = np.clip((hidden_norm - 0.5) * enhancement_factor + 0.5, 0, 1)
+    enhanced_contrast = np.clip((hidden_norm - 0.5) * enhancement_factor * 2.0 + 0.5, 0, 1)
     enhanced_gray = (enhanced_contrast * 255.0).astype(np.uint8)
     
-    # エッジ強調（OpenCV最適化）
-    edges = cv2.Canny(enhanced_gray, 50, 150)
+    # 高精度エッジ強調
+    edges = cv2.Canny(enhanced_gray, 30, 120)
     edge_enhanced = cv2.dilate(edges, np.ones((3,3), np.uint8), iterations=1)
     
-    # マスク生成（ベクトル化）
+    # マスク生成（詳細保持）
     _, binary_mask = cv2.threshold(enhanced_gray, 100, 255, cv2.THRESH_BINARY_INV)
     
-    # エッジをマスクに統合（ベクトル化）
+    # エッジをマスクに統合
     combined_mask = np.maximum(binary_mask, edge_enhanced)
     
-    # ブラー処理
-    blurred_mask = cv2.GaussianBlur(combined_mask, (7, 7), 0)
-    mask = (blurred_mask.astype(np.float32) / 255.0) * overlay_opacity
+    # 軽いブラー処理（詳細を保持）
+    blurred_mask = cv2.GaussianBlur(combined_mask, (5, 5), 0)
+    adaptive_mask = (blurred_mask.astype(np.float32) / 255.0) * overlay_opacity
     
-    # **高速縞パターン生成**
+    # 詳細な縞パターン生成
     stripe_pattern = create_vectorized_stripe_base(height, width, pattern_type)
     
-    # RGB変換（ブロードキャスト）
-    stripes = np.stack([stripe_pattern, stripe_pattern, stripe_pattern], axis=2)
+    # 隠し画像の詳細を反映した縞生成
+    detail_modulation = (enhanced_contrast - 0.5) * 60  # より強い変調
     
-    # **ベクトル化合成**
-    gray = np.full((height, width, 3), 128.0, dtype=np.float32)
-    mask_3d = np.stack([mask, mask, mask], axis=2)
+    # RGB変換（詳細保持）
+    stripes = np.zeros((height, width, 3), dtype=np.float32)
+    base_values = np.where(stripe_pattern == 0, 
+                          80 + enhanced_contrast * 50,   # 暗い縞: 80-130
+                          170 + enhanced_contrast * 40)  # 明るい縞: 170-210
     
-    result = stripes.astype(np.float32) * (1.0 - mask_3d) + gray * mask_3d
+    final_values = base_values + detail_modulation
+    stripes = np.stack([final_values, final_values, final_values], axis=2)
     
-    return result.astype(np.uint8)
+    # 適応的グレー値
+    gray_value = 110 + enhanced_contrast * 45  # 110-155
+    gray = np.full((height, width, 3), gray_value, dtype=np.float32)
+    
+    # マスク適用
+    mask_3d = np.stack([adaptive_mask, adaptive_mask, adaptive_mask], axis=2)
+    result = stripes * (1.0 - mask_3d) + gray * mask_3d
+    
+    return np.clip(result, 25, 230).astype(np.uint8)
 
 def create_multi_frequency_overlay(hidden_img, pattern_type="horizontal", frequencies=[1, 2], overlay_opacity=0.6):
     """
-    多周波数重ね合わせ：複数の縞模様を同時生成（ベクトル化）
+    多周波数重ね合わせ：複数の縞模様による詳細表現
     """
     if isinstance(hidden_img, np.ndarray):
         hidden_array = hidden_img.astype(np.float32)
@@ -148,57 +170,66 @@ def create_multi_frequency_overlay(hidden_img, pattern_type="horizontal", freque
     else:
         hidden_gray = hidden_array
     
-    # **ベクトル化による多周波数処理**
+    # 隠し画像の詳細分析
+    hidden_norm = hidden_gray / 255.0
+    hidden_detailed = np.clip((hidden_norm - 0.5) * 2.2 + 0.5, 0, 1)
+    
     # 基本マスク生成
     _, binary_mask = cv2.threshold(hidden_gray, 100, 255, cv2.THRESH_BINARY_INV)
     blurred_mask = cv2.GaussianBlur(binary_mask, (5, 5), 0)
     base_mask = blurred_mask.astype(np.float32) / 255.0
     
-    # **複数周波数の縞パターンを同時生成**
+    # 複数周波数の詳細縞パターンを生成
     stripe_patterns = []
     for freq in frequencies:
         pattern = create_vectorized_stripe_base(height, width, pattern_type, frequency=freq)
-        stripe_patterns.append(pattern)
+        # 隠し画像の詳細を各周波数に反映
+        detailed_pattern = pattern + (hidden_detailed - 0.5) * 30  # 詳細変調
+        stripe_patterns.append(detailed_pattern)
     
-    # パターン合成（ベクトル化）
+    # パターン合成（詳細保持）
     if len(stripe_patterns) > 1:
-        # 複数パターンの平均（ベクトル化）
-        combined_stripes = np.stack(stripe_patterns, axis=0)
-        final_stripes = np.mean(combined_stripes, axis=0)
+        # 重み付き合成（低周波数により多くの重み）
+        weights = [1.0 / (i + 1) for i in range(len(stripe_patterns))]
+        total_weight = sum(weights)
+        normalized_weights = [w / total_weight for w in weights]
+        
+        combined_stripes = np.zeros_like(stripe_patterns[0])
+        for pattern, weight in zip(stripe_patterns, normalized_weights):
+            combined_stripes += pattern * weight
     else:
-        final_stripes = stripe_patterns[0]
+        combined_stripes = stripe_patterns[0]
     
-    # RGB変換
-    stripes_rgb = np.stack([final_stripes, final_stripes, final_stripes], axis=2)
+    # RGB変換（詳細保持）
+    stripes_rgb = np.stack([combined_stripes, combined_stripes, combined_stripes], axis=2)
     
-    # **ベクトル化合成**
-    gray = np.full((height, width, 3), 128.0, dtype=np.float32)
+    # 適応的グレー値（隠し画像詳細を反映）
+    gray_detail = 105 + hidden_detailed * 50  # 105-155
+    gray = np.full((height, width, 3), gray_detail, dtype=np.float32)
+    
+    # マスク適用
     mask_3d = np.stack([base_mask * overlay_opacity] * 3, axis=2)
+    result = stripes_rgb * (1.0 - mask_3d) + gray * mask_3d
     
-    result = stripes_rgb.astype(np.float32) * (1.0 - mask_3d) + gray * mask_3d
-    
-    return result.astype(np.uint8)
+    return np.clip(result, 35, 220).astype(np.uint8)
 
 def create_vectorized_stripe_base(height, width, pattern_type="horizontal", frequency=1):
     """
-    ベクトル化による基本縞パターン生成
-    メモリ効率的なブロードキャスト活用
+    ベクトル化による詳細縞パターン生成
+    隠し画像の詳細を保持するメモリ効率的実装
     """
     if pattern_type == "horizontal":
-        # 行ベース（メモリ効率的）
         y_coords = np.arange(height, dtype=np.int32).reshape(-1, 1)
         pattern_base = ((y_coords * frequency) % 2) * 255
-        return np.broadcast_to(pattern_base, (height, width)).astype(np.uint8)
-        
+        return np.broadcast_to(pattern_base, (height, width)).astype(np.float32)
     else:  # vertical
-        # 列ベース（メモリ効率的）
         x_coords = np.arange(width, dtype=np.int32).reshape(1, -1)
         pattern_base = ((x_coords * frequency) % 2) * 255
-        return np.broadcast_to(pattern_base, (height, width)).astype(np.uint8)
+        return np.broadcast_to(pattern_base, (height, width)).astype(np.float32)
 
 def create_gradient_overlay_pattern(hidden_img, pattern_type="horizontal", overlay_opacity=0.6, gradient_direction="radial"):
     """
-    グラデーション重ね合わせ：空間的に変化するオーバーレイ効果
+    グラデーション重ね合わせ：空間的に変化する詳細オーバーレイ効果
     """
     if isinstance(hidden_img, np.ndarray):
         hidden_array = hidden_img.astype(np.float32)
@@ -213,55 +244,56 @@ def create_gradient_overlay_pattern(hidden_img, pattern_type="horizontal", overl
     else:
         hidden_gray = hidden_array
     
-    # **ベクトル化によるグラデーション生成**
+    # 隠し画像の詳細分析
+    hidden_norm = hidden_gray / 255.0
+    hidden_enhanced = np.clip((hidden_norm - 0.5) * 2.0 + 0.5, 0, 1)
+    
+    # グラデーション生成（詳細対応）
     if gradient_direction == "radial":
-        # 放射状グラデーション（ベクトル化）
         center_y, center_x = height // 2, width // 2
         y_coords, x_coords = np.ogrid[:height, :width]
-        
-        # 距離計算（ベクトル化）
         distances = np.sqrt((y_coords - center_y)**2 + (x_coords - center_x)**2)
         max_distance = np.sqrt(center_y**2 + center_x**2)
         gradient = 1.0 - (distances / max_distance)
-        
     elif gradient_direction == "linear_horizontal":
-        # 水平グラデーション（ベクトル化）
         x_coords = np.arange(width).reshape(1, -1)
         gradient = x_coords / (width - 1)
         gradient = np.broadcast_to(gradient, (height, width))
-        
     elif gradient_direction == "linear_vertical":
-        # 垂直グラデーション（ベクトル化）
         y_coords = np.arange(height).reshape(-1, 1)
         gradient = y_coords / (height - 1)
         gradient = np.broadcast_to(gradient, (height, width))
-        
-    else:  # default to uniform
+    else:  # uniform
         gradient = np.ones((height, width), dtype=np.float32)
     
-    # **基本処理（ベクトル化）**
+    # 基本処理
     _, binary_mask = cv2.threshold(hidden_gray, 100, 255, cv2.THRESH_BINARY_INV)
     blurred_mask = cv2.GaussianBlur(binary_mask, (5, 5), 0)
     base_mask = blurred_mask.astype(np.float32) / 255.0
     
-    # グラデーションとマスクの合成（ベクトル化）
-    final_mask = base_mask * gradient * overlay_opacity
+    # グラデーションと隠し画像の詳細を合成
+    detail_gradient = gradient * (0.7 + hidden_enhanced * 0.3)
+    final_mask = base_mask * detail_gradient * overlay_opacity
     
-    # 縞パターン生成
+    # 詳細縞パターン生成
     stripes = create_vectorized_stripe_base(height, width, pattern_type)
-    stripes_rgb = np.stack([stripes, stripes, stripes], axis=2)
+    # 隠し画像詳細の追加
+    stripes_detailed = stripes + (hidden_enhanced - 0.5) * 40
+    stripes_rgb = np.stack([stripes_detailed, stripes_detailed, stripes_detailed], axis=2)
     
-    # **ベクトル化合成**
-    gray = np.full((height, width, 3), 128.0, dtype=np.float32)
+    # 適応的グレー値
+    gray_adaptive = 110 + hidden_enhanced * 45 + gradient * 20  # 詳細とグラデーション反映
+    gray = np.stack([gray_adaptive, gray_adaptive, gray_adaptive], axis=2)
+    
+    # 合成
     mask_3d = np.stack([final_mask, final_mask, final_mask], axis=2)
+    result = stripes_rgb * (1.0 - mask_3d) + gray * mask_3d
     
-    result = stripes_rgb.astype(np.float32) * (1.0 - mask_3d) + gray * mask_3d
-    
-    return result.astype(np.uint8)
+    return np.clip(result, 40, 215).astype(np.uint8)
 
 def create_adaptive_overlay_pattern(hidden_img, pattern_type="horizontal", overlay_opacity=0.6, adaptation_strength=1.0):
     """
-    適応的重ね合わせ：画像内容に応じて自動調整（ベクトル化）
+    適応的重ね合わせ：画像内容に応じて自動調整（詳細版）
     """
     if isinstance(hidden_img, np.ndarray):
         hidden_array = hidden_img.astype(np.float32)
@@ -276,36 +308,40 @@ def create_adaptive_overlay_pattern(hidden_img, pattern_type="horizontal", overl
     else:
         hidden_gray = hidden_array
     
-    # **ベクトル化による適応処理**
-    # 局所コントラスト計算（ベクトル化）
-    kernel = np.ones((9, 9), np.float32) / 81
+    # 局所詳細分析
+    kernel = np.ones((7, 7), np.float32) / 49
     local_mean = cv2.filter2D(hidden_gray, -1, kernel)
     local_variance = cv2.filter2D((hidden_gray - local_mean)**2, -1, kernel)
     local_std = np.sqrt(local_variance)
     
-    # 正規化（ベクトル化）
+    # 正規化
     contrast_map = local_std / (np.max(local_std) + 1e-8)
     
-    # 適応的強度調整（ベクトル化）
-    adaptive_strength = overlay_opacity * (1.0 + contrast_map * adaptation_strength)
+    # 適応的強度調整（詳細保持）
+    adaptive_strength = overlay_opacity * (0.5 + contrast_map * adaptation_strength)
     adaptive_strength = np.clip(adaptive_strength, 0.0, 1.0)
     
-    # **基本マスク処理**
+    # 基本マスク処理
     _, binary_mask = cv2.threshold(hidden_gray, 100, 255, cv2.THRESH_BINARY_INV)
     blurred_mask = cv2.GaussianBlur(binary_mask, (5, 5), 0)
     base_mask = blurred_mask.astype(np.float32) / 255.0
     
-    # 適応的マスク（ベクトル化）
+    # 適応的マスク（詳細反映）
     final_mask = base_mask * adaptive_strength
     
-    # 縞パターン生成
+    # 詳細縞パターン生成
     stripes = create_vectorized_stripe_base(height, width, pattern_type)
-    stripes_rgb = np.stack([stripes, stripes, stripes], axis=2)
+    # 局所詳細の反映
+    detail_enhancement = (contrast_map - 0.5) * 50
+    stripes_enhanced = stripes + detail_enhancement
+    stripes_rgb = np.stack([stripes_enhanced, stripes_enhanced, stripes_enhanced], axis=2)
     
-    # **ベクトル化合成**
-    gray = np.full((height, width, 3), 128.0, dtype=np.float32)
+    # 適応的グレー値
+    gray_adaptive = 108 + contrast_map * 47  # 詳細に応じて変化
+    gray = np.stack([gray_adaptive, gray_adaptive, gray_adaptive], axis=2)
+    
+    # 合成
     mask_3d = np.stack([final_mask, final_mask, final_mask], axis=2)
+    result = stripes_rgb * (1.0 - mask_3d) + gray * mask_3d
     
-    result = stripes_rgb.astype(np.float32) * (1.0 - mask_3d) + gray * mask_3d
-    
-    return result.astype(np.uint8)
+    return np.clip(result, 45, 210).astype(np.uint8)
