@@ -1,14 +1,18 @@
-# patterns/overlay.py - 濃淡詳細表現対応版
+# patterns/overlay.py - 濃淡詳細表現版（デフォルト適用）
 
 import numpy as np
 import cv2
 from core.image_utils import ensure_array, get_grayscale
-from patterns.base import hex_to_rgb
+
+def hex_to_rgb(hex_color):
+    """HEX色をRGBタプルに変換"""
+    hex_color = hex_color.lstrip('#')
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 def create_overlay_moire_pattern(hidden_img, pattern_type="horizontal", overlay_opacity=0.6, color1="#000000", color2="#FFFFFF"):
     """
-    重ね合わせモード：濃淡詳細表現対応版
-    隠し画像の詳細を重ね合わせ効果で表現
+    重ね合わせモード：濃淡詳細表現版（デフォルト適用）
+    隠し画像の詳細を重ね合わせ効果で濃淡として表現
     """
     if isinstance(hidden_img, np.ndarray):
         hidden_array = hidden_img.astype(np.float32)
@@ -60,23 +64,23 @@ def create_overlay_moire_pattern(hidden_img, pattern_type="horizontal", overlay_
     dark_regions = stripe_pattern == 0
     light_regions = stripe_pattern == 1
     
-    # 隠し画像に基づく詳細な明度調整
-    brightness_modulation = 0.4 + hidden_enhanced * 0.6  # 0.4-1.0の範囲
+    # 隠し画像に基づく詳細な明度調整（濃淡表現）
+    brightness_modulation = 0.5 + hidden_enhanced * 0.5  # 0.5-1.0の範囲
     
-    # 暗い縞の詳細処理
-    dark_base_values = np.array([70, 90, 110]) + hidden_enhanced * 40  # 範囲を拡大
+    # 暗い縞の詳細処理（濃淡表現）
+    dark_base_values = 80 + hidden_enhanced * 40  # 80-120の範囲
     for i in range(3):
-        dark_value = dark_base_values[i % 3] * brightness_modulation * (color1_rgb[i] / 255.0)
+        dark_value = dark_base_values * brightness_modulation * (color1_rgb[i] / 255.0)
         stripes[dark_regions, i] = dark_value[dark_regions]
     
-    # 明るい縞の詳細処理
-    light_base_values = np.array([160, 180, 200]) + hidden_enhanced * 35
+    # 明るい縞の詳細処理（濃淡表現）
+    light_base_values = 170 + hidden_enhanced * 35  # 170-205の範囲
     for i in range(3):
-        light_value = light_base_values[i % 3] * brightness_modulation * (color2_rgb[i] / 255.0)
+        light_value = light_base_values * brightness_modulation * (color2_rgb[i] / 255.0)
         stripes[light_regions, i] = light_value[light_regions]
     
     # 適応的グレー値（隠し画像の詳細を反映）
-    gray_base = 100 + hidden_enhanced * 55  # 100-155の範囲
+    gray_base = 110 + hidden_enhanced * 45  # 110-155の範囲
     gray = np.zeros((height, width, 3), dtype=np.float32)
     for i in range(3):
         gray[:, :, i] = gray_base
@@ -87,14 +91,14 @@ def create_overlay_moire_pattern(hidden_img, pattern_type="horizontal", overlay_
     # 最終合成（詳細保持）
     result = stripes * (1.0 - mask_3d) + gray * mask_3d
     
-    # 適切な範囲にクリッピング
-    result = np.clip(result, 30, 225)
+    # 適切な範囲にクリッピング（濃淡保持）
+    result = np.clip(result, 40, 215)
     
     return result.astype(np.uint8)
 
 def create_enhanced_overlay_pattern(hidden_img, pattern_type="horizontal", overlay_opacity=0.6, enhancement_factor=1.2):
     """
-    強化版重ね合わせモード：詳細コントラスト強化版
+    強化版重ね合わせモード：詳細コントラスト強化版（濃淡表現・デフォルト適用）
     """
     if isinstance(hidden_img, np.ndarray):
         hidden_array = hidden_img.astype(np.float32)
@@ -131,27 +135,41 @@ def create_enhanced_overlay_pattern(hidden_img, pattern_type="horizontal", overl
     # 詳細な縞パターン生成
     stripe_pattern = create_vectorized_stripe_base(height, width, pattern_type)
     
-    # 隠し画像の詳細を反映した縞生成
-    detail_modulation = (enhanced_contrast - 0.5) * 60  # より強い変調
+    # 隠し画像の詳細を反映した縞生成（濃淡表現）
+    detail_modulation = (enhanced_contrast - 0.5) * 50  # 詳細変調
     
-    # RGB変換（詳細保持）
+    # RGB変換（詳細保持・濃淡表現）
     stripes = np.zeros((height, width, 3), dtype=np.float32)
     base_values = np.where(stripe_pattern == 0, 
-                          80 + enhanced_contrast * 50,   # 暗い縞: 80-130
-                          170 + enhanced_contrast * 40)  # 明るい縞: 170-210
+                          90 + enhanced_contrast * 40,   # 暗い縞: 90-130
+                          160 + enhanced_contrast * 45)  # 明るい縞: 160-205
     
     final_values = base_values + detail_modulation
     stripes = np.stack([final_values, final_values, final_values], axis=2)
     
     # 適応的グレー値
-    gray_value = 110 + enhanced_contrast * 45  # 110-155
+    gray_value = 115 + enhanced_contrast * 40  # 115-155
     gray = np.full((height, width, 3), gray_value, dtype=np.float32)
     
     # マスク適用
     mask_3d = np.stack([adaptive_mask, adaptive_mask, adaptive_mask], axis=2)
     result = stripes * (1.0 - mask_3d) + gray * mask_3d
     
-    return np.clip(result, 25, 230).astype(np.uint8)
+    return np.clip(result, 35, 210).astype(np.uint8)
+
+def create_vectorized_stripe_base(height, width, pattern_type="horizontal", frequency=1):
+    """
+    ベクトル化による詳細縞パターン生成（濃淡表現対応）
+    隠し画像の詳細を保持するメモリ効率的実装
+    """
+    if pattern_type == "horizontal":
+        y_coords = np.arange(height, dtype=np.int32).reshape(-1, 1)
+        pattern_base = ((y_coords * frequency) % 2) * 255
+        return np.broadcast_to(pattern_base, (height, width)).astype(np.float32)
+    else:  # vertical
+        x_coords = np.arange(width, dtype=np.int32).reshape(1, -1)
+        pattern_base = ((x_coords * frequency) % 2) * 255
+        return np.broadcast_to(pattern_base, (height, width)).astype(np.float32)
 
 def create_multi_frequency_overlay(hidden_img, pattern_type="horizontal", frequencies=[1, 2], overlay_opacity=0.6):
     """
