@@ -12,39 +12,31 @@ def hex_to_rgb(hex_color):
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 def create_stripe_base(height, width, pattern_type="horizontal", color1="#000000", color2="#ffffff"):
-    """基本的な縞模様を生成（濃淡詳細表現版）- 常に濃淡で表現"""
+    """基本的な縞模様を生成（明確な境界版）- モアレ効果のため1ピクセル単位の明確な縞"""
     result = np.zeros((height, width, 3), dtype=np.uint8)
     
     # HEX色をRGBに変換
     rgb1 = hex_to_rgb(color1)
     rgb2 = hex_to_rgb(color2)
     
-    # 濃淡表現用の基準値（完全な黒白を避ける）
-    dark_base = 60   # 暗い縞の基準値
-    light_base = 195 # 明るい縞の基準値
-    
     if pattern_type == "horizontal":
-        # 横縞パターン（濃淡表現）
+        # 横縞パターン（明確な境界）
         for y in range(height):
             if y % 2 == 0:
                 # 暗い縞
-                for i in range(3):
-                    result[y, :, i] = dark_base * (rgb1[i] / 255.0)
+                result[y, :] = rgb1
             else:
                 # 明るい縞
-                for i in range(3):
-                    result[y, :, i] = light_base * (rgb2[i] / 255.0)
+                result[y, :] = rgb2
     else:  # vertical
-        # 縦縞パターン（濃淡表現）
+        # 縦縞パターン（明確な境界）
         for x in range(width):
             if x % 2 == 0:
                 # 暗い縞
-                for i in range(3):
-                    result[:, x, i] = dark_base * (rgb1[i] / 255.0)
+                result[:, x] = rgb1
             else:
                 # 明るい縞
-                for i in range(3):
-                    result[:, x, i] = light_base * (rgb2[i] / 255.0)
+                result[:, x] = rgb2
     
     return result
 
@@ -54,8 +46,8 @@ def get_adaptive_strength(mode):
 
 def create_gradation_stripe_base(hidden_img, pattern_type="horizontal", color1="#000000", color2="#ffffff", detail_strength=0.8):
     """
-    隠し画像の詳細を濃淡として表現する縞模様を生成
-    detail_strength: 隠し画像の詳細をどの程度反映するか (0.0-1.0)
+    隠し画像の詳細を微調整として表現する明確な縞模様を生成
+    明確な1ピクセル縞境界を保ちつつ、隠し画像詳細を微調整で反映
     """
     hidden_array = ensure_array(hidden_img)
     height, width = hidden_array.shape[:2]
@@ -72,85 +64,81 @@ def create_gradation_stripe_base(hidden_img, pattern_type="horizontal", color1="
     
     # 隠し画像の正規化（0-1の範囲）
     hidden_norm = hidden_gray / 255.0
+    hidden_contrast = np.clip((hidden_norm - 0.5) * 2.0 + 0.5, 0, 1)
     
     # 輪郭強調で詳細を保持
     edges = cv2.Canny(hidden_gray.astype(np.uint8), 50, 150).astype(np.float32) / 255.0
     
     # 結果配列を初期化
-    result = np.zeros((height, width, 3), dtype=np.float32)
+    result = np.zeros((height, width, 3), dtype=np.uint8)
     
     if pattern_type == "horizontal":
-        # 横縞パターン（濃淡付き）
+        # 横縞パターン（明確な境界 + 微調整）
         for y in range(height):
-            # 基本の縞パターン（0または1）
-            stripe_base = y % 2
+            stripe_base = y % 2  # 0または1の明確な境界
             
-            # 隠し画像の値をベースに濃淡を計算
             for x in range(width):
-                hidden_value = hidden_norm[y, x]
+                hidden_value = hidden_contrast[y, x]
                 edge_value = edges[y, x]
                 
-                # 基本色を選択
+                # 基本色の選択（明確な境界）
                 if stripe_base == 0:
                     base_color = np.array(rgb1, dtype=np.float32)
+                    base_brightness = 25 + hidden_value * 30  # 25-55の範囲
                 else:
                     base_color = np.array(rgb2, dtype=np.float32)
+                    base_brightness = 200 + hidden_value * 35  # 200-235の範囲
                 
-                # 隠し画像の値に基づいて明度を調整
-                # hidden_valueが高い（明るい）ほど明るく、低いほど暗く
-                brightness_factor = 0.3 + hidden_value * 0.7  # 0.3-1.0の範囲
+                # エッジ部分の微調整
+                edge_adjustment = edge_value * detail_strength * 15
                 
-                # エッジ部分はさらにコントラストを強調
-                if edge_value > 0.5:
-                    brightness_factor = brightness_factor * (1.0 + detail_strength * 0.5)
+                # 詳細微調整
+                detail_adjustment = (hidden_value - 0.5) * detail_strength * 20
                 
-                # 細かい濃淡調整
-                detail_adjustment = (hidden_value - 0.5) * detail_strength * 50  # -25 から +25
+                # 最終的な明度
+                final_brightness = base_brightness + detail_adjustment + edge_adjustment
                 
-                # 最終的な色を計算
-                final_color = base_color * brightness_factor + detail_adjustment
-                result[y, x] = final_color
+                # RGB値に適用
+                for i in range(3):
+                    result[y, x, i] = np.clip(final_brightness * (base_color[i] / 255.0), 0, 255)
                 
     else:  # vertical
-        # 縦縞パターン（濃淡付き）
+        # 縦縞パターン（明確な境界 + 微調整）
         for x in range(width):
-            # 基本の縞パターン（0または1）
-            stripe_base = x % 2
+            stripe_base = x % 2  # 0または1の明確な境界
             
-            # 隠し画像の値をベースに濃淡を計算
             for y in range(height):
-                hidden_value = hidden_norm[y, x]
+                hidden_value = hidden_contrast[y, x]
                 edge_value = edges[y, x]
                 
-                # 基本色を選択
+                # 基本色の選択（明確な境界）
                 if stripe_base == 0:
                     base_color = np.array(rgb1, dtype=np.float32)
+                    base_brightness = 25 + hidden_value * 30  # 25-55の範囲
                 else:
                     base_color = np.array(rgb2, dtype=np.float32)
+                    base_brightness = 200 + hidden_value * 35  # 200-235の範囲
                 
-                # 隠し画像の値に基づいて明度を調整
-                brightness_factor = 0.3 + hidden_value * 0.7  # 0.3-1.0の範囲
+                # エッジ部分の微調整
+                edge_adjustment = edge_value * detail_strength * 15
                 
-                # エッジ部分はさらにコントラストを強調
-                if edge_value > 0.5:
-                    brightness_factor = brightness_factor * (1.0 + detail_strength * 0.5)
+                # 詳細微調整
+                detail_adjustment = (hidden_value - 0.5) * detail_strength * 20
                 
-                # 細かい濃淡調整
-                detail_adjustment = (hidden_value - 0.5) * detail_strength * 50  # -25 から +25
+                # 最終的な明度
+                final_brightness = base_brightness + detail_adjustment + edge_adjustment
                 
-                # 最終的な色を計算
-                final_color = base_color * brightness_factor + detail_adjustment
-                result[y, x] = final_color
+                # RGB値に適用
+                for i in range(3):
+                    result[y, x, i] = np.clip(final_brightness * (base_color[i] / 255.0), 0, 255)
     
-    # 値を0-255の範囲にクリップ
-    result = np.clip(result, 0, 255)
-    
-    return result.astype(np.uint8)
+    return result
 
 def create_enhanced_gradation_stripe(hidden_img, pattern_type="horizontal", color1="#000000", color2="#ffffff",
                                    detail_strength=0.8, contrast_boost=1.5):
     """
-    より高度な濃淡表現の縞模様（コントラスト強化版）
+    より高度な詳細表現の明確な縞模様（コントラスト強化版）
+    明確な1ピクセル縞境界を保ちつつ、隠し画像詳細をより強く反映
     """
     hidden_array = ensure_array(hidden_img)
     height, width = hidden_array.shape[:2]
@@ -177,7 +165,7 @@ def create_enhanced_gradation_stripe(hidden_img, pattern_type="horizontal", colo
     edges_combined = np.maximum(edges1, edges2 * 0.7)
     
     # 結果配列を初期化
-    result = np.zeros((height, width, 3), dtype=np.float32)
+    result = np.zeros((height, width, 3), dtype=np.uint8)
     
     # ベクトル化による高速処理
     if pattern_type == "horizontal":
@@ -193,30 +181,27 @@ def create_enhanced_gradation_stripe(hidden_img, pattern_type="horizontal", colo
     dark_regions = stripe_pattern == 0
     light_regions = stripe_pattern == 1
     
-    # 明度調整係数を計算
-    brightness_factor = 0.2 + hidden_contrast * 0.8  # 0.2-1.0の範囲
-    
     # エッジ強調係数
-    edge_boost = 1.0 + edges_combined * detail_strength * 0.8
-    brightness_factor = brightness_factor * edge_boost
+    edge_boost = edges_combined * detail_strength * 25
     
-    # 細かい濃淡調整
-    detail_adjustment = (hidden_contrast - 0.5) * detail_strength * 60  # -30 から +30
+    # 細かい詳細調整
+    detail_adjustment = (hidden_contrast - 0.5) * detail_strength * 40
     
     # RGB各チャンネルへの適用
     for i in range(3):
-        # 暗い縞の処理
-        base_dark = rgb1[i]
-        result[dark_regions, i] = base_dark * brightness_factor[dark_regions] + detail_adjustment[dark_regions]
+        # 暗い縞の処理（明確な基準値 + 微調整）
+        dark_base = 20 + hidden_contrast * 35  # 20-55の範囲
+        dark_final = dark_base + detail_adjustment + edge_boost
+        dark_values = np.clip(dark_final, 0, 80) * (rgb1[i] / 255.0)
+        result[dark_regions, i] = dark_values[dark_regions]
         
-        # 明るい縞の処理
-        base_light = rgb2[i]
-        result[light_regions, i] = base_light * brightness_factor[light_regions] + detail_adjustment[light_regions]
+        # 明るい縞の処理（明確な基準値 + 微調整）
+        light_base = 200 + hidden_contrast * 35  # 200-235の範囲
+        light_final = light_base + detail_adjustment + edge_boost
+        light_values = np.clip(light_final, 175, 255) * (rgb2[i] / 255.0)
+        result[light_regions, i] = light_values[light_regions]
     
-    # 値を0-255の範囲にクリップ
-    result = np.clip(result, 0, 255)
-    
-    return result.astype(np.uint8)
+    return result
 
 def get_adaptive_strength(mode):
     """モードに応じた強度を取得"""
