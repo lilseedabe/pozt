@@ -11,8 +11,8 @@ def hex_to_rgb(hex_color):
 
 def create_overlay_moire_pattern(hidden_img, pattern_type="horizontal", overlay_opacity=0.6, color1="#000000", color2="#FFFFFF"):
     """
-    重ね合わせモード：濃淡詳細表現版（ベクトル化対応）
-    隠し画像の詳細を重ね合わせ効果で濃淡として表現
+    重ね合わせモード：明確な縞境界保持版（ベクトル化対応）
+    隠し画像の詳細を重ね合わせ効果で微調整として表現、明確な縞でモアレ効果を維持
     """
     if isinstance(hidden_img, np.ndarray):
         hidden_array = hidden_img.astype(np.float32)
@@ -33,54 +33,51 @@ def create_overlay_moire_pattern(hidden_img, pattern_type="horizontal", overlay_
     
     # 隠し画像の正規化と強調
     hidden_norm = hidden_gray / 255.0
-    hidden_enhanced = np.clip((hidden_norm - 0.5) * 1.8 + 0.5, 0, 1)
+    hidden_enhanced = np.clip((hidden_norm - 0.5) * 1.5 + 0.5, 0, 1)
     
-    # 複数レベルの二値化マスク生成
-    _, binary_mask1 = cv2.threshold(hidden_gray, 100, 255, cv2.THRESH_BINARY_INV)
-    _, binary_mask2 = cv2.threshold(hidden_gray, 140, 255, cv2.THRESH_BINARY_INV)
+    # 二値化マスク生成
+    _, binary_mask = cv2.threshold(hidden_gray, 100, 255, cv2.THRESH_BINARY_INV)
     
-    # ガウシアンブラー（詳細保持のため軽め）
-    blurred_mask1 = cv2.GaussianBlur(binary_mask1, (3, 3), 0)
-    blurred_mask2 = cv2.GaussianBlur(binary_mask2, (7, 7), 0)
+    # 軽いガウシアンブラー（明確な境界を保持）
+    blurred_mask = cv2.GaussianBlur(binary_mask, (3, 3), 0)
+    adaptive_mask = (blurred_mask.astype(np.float32) / 255.0) * overlay_opacity
     
-    # 複合マスクの生成
-    composite_mask = (blurred_mask1.astype(np.float32) * 0.7 + blurred_mask2.astype(np.float32) * 0.3) / 255.0
-    adaptive_mask = composite_mask * overlay_opacity
-    
-    # 縞模様パターンの生成（詳細を保持）
+    # 明確な1ピクセル縞模様パターンの生成
     if pattern_type == "horizontal":
         y_coords = np.arange(height, dtype=np.uint8).reshape(-1, 1)
-        stripe_pattern = (y_coords % 2)
+        stripe_pattern = (y_coords % 2)  # 0または1の明確な境界
         stripe_pattern = np.broadcast_to(stripe_pattern, (height, width))
     else:  # vertical
         x_coords = np.arange(width, dtype=np.uint8).reshape(1, -1)
-        stripe_pattern = (x_coords % 2)
+        stripe_pattern = (x_coords % 2)  # 0または1の明確な境界
         stripe_pattern = np.broadcast_to(stripe_pattern, (height, width))
     
-    # 詳細な濃淡縞パターンの生成
+    # 明確な縞パターンの生成（微調整付き）
     stripes = np.zeros((height, width, 3), dtype=np.float32)
     
     # 暗い縞と明るい縞の領域
     dark_regions = stripe_pattern == 0
     light_regions = stripe_pattern == 1
     
-    # 隠し画像に基づく詳細な明度調整（濃淡表現）
-    brightness_modulation = 0.5 + hidden_enhanced * 0.5  # 0.5-1.0の範囲
+    # 隠し画像詳細による微調整
+    detail_adjustment = (hidden_enhanced - 0.5) * 25  # 微調整範囲
     
-    # 暗い縞の詳細処理（濃淡表現）
-    dark_base_values = 80 + hidden_enhanced * 40  # 80-120の範囲
+    # RGB各チャンネルの処理
     for i in range(3):
-        dark_value = dark_base_values * brightness_modulation * (color1_rgb[i] / 255.0)
-        stripes[dark_regions, i] = dark_value[dark_regions]
-    
-    # 明るい縞の詳細処理（濃淡表現）
-    light_base_values = 170 + hidden_enhanced * 35  # 170-205の範囲
-    for i in range(3):
-        light_value = light_base_values * brightness_modulation * (color2_rgb[i] / 255.0)
-        stripes[light_regions, i] = light_value[light_regions]
+        # 暗い縞の処理（基本値 + 微調整）
+        dark_base = 30 + hidden_enhanced * 25  # 30-55の範囲
+        dark_final = dark_base + detail_adjustment
+        dark_values = np.clip(dark_final, 5, 80) * (color1_rgb[i] / 255.0)
+        stripes[dark_regions, i] = dark_values[dark_regions]
+        
+        # 明るい縞の処理（基本値 + 微調整）
+        light_base = 200 + hidden_enhanced * 30  # 200-230の範囲
+        light_final = light_base + detail_adjustment
+        light_values = np.clip(light_final, 175, 255) * (color2_rgb[i] / 255.0)
+        stripes[light_regions, i] = light_values[light_regions]
     
     # 適応的なグレー値（隠し画像の詳細を反映）
-    grey_base = 110 + hidden_enhanced * 45  # 110-155の範囲
+    grey_base = 120 + hidden_enhanced * 25  # 120-145の範囲
     grey = np.zeros((height, width, 3), dtype=np.float32)
     for i in range(3):
         grey[:, :, i] = grey_base
@@ -88,11 +85,11 @@ def create_overlay_moire_pattern(hidden_img, pattern_type="horizontal", overlay_
     # マスクを3チャンネルに拡張
     mask_3d = np.stack([adaptive_mask, adaptive_mask, adaptive_mask], axis=2)
     
-    # 最終合成（詳細保持）
+    # 最終合成
     result = stripes * (1.0 - mask_3d) + grey * mask_3d
     
-    # 適切な範囲にクリッピング（濃淡保持）
-    result = np.clip(result, 40, 215)
+    # 適切な範囲にクリッピング
+    result = np.clip(result, 0, 255)
     
     return result.astype(np.uint8)
 
