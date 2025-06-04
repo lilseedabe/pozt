@@ -1,4 +1,4 @@
-# patterns/moire.py - 修正版（自然な濃淡表現）
+# patterns/moire.py - 濃淡詳細表現版（ベクトル化対応）
 
 import numpy as np
 import cv2
@@ -9,9 +9,10 @@ def hex_to_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
-def create_high_freq_moire_stripes(hidden_img, pattern_type="horizontal", strength=0.015, color1="#000000", color2="#FFFFFF"):
+def create_high_frequency_moire_stripes(hidden_img, pattern_type="horizontal", strength=0.015, color1="#000000", color2="#FFFFFF"):
     """
-    超高周波モアレ縞模様：自然な濃淡表現版（修正版）
+    超高周波モアレ縞模様：濃淡詳細表現版（ベクトル化対応）
+    隠し画像の詳細を縞模様の濃淡として表現
     """
     if isinstance(hidden_img, np.ndarray):
         hidden_array = hidden_img.astype(np.float32)
@@ -20,25 +21,25 @@ def create_high_freq_moire_stripes(hidden_img, pattern_type="horizontal", streng
     
     height, width = hidden_array.shape[:2]
     
-    # グレースケール変換
+    # カラー画像をグレースケールに変換
     if len(hidden_array.shape) == 3:
         hidden_gray = cv2.cvtColor(hidden_array.astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)
     else:
         hidden_gray = hidden_array
     
-    # 隠し画像の正規化と軽いコントラスト強調
+    # 隠し画像のコントラスト強調
     hidden_norm = hidden_gray / 255.0
-    hidden_contrast = np.clip((hidden_norm - 0.5) * 1.8 + 0.5, 0, 1)
+    hidden_contrast = np.clip((hidden_norm - 0.5) * 3.0 + 0.5, 0, 1)
     
-    # エッジ検出（適度な設定）
-    edges = cv2.Canny((hidden_contrast * 255).astype(np.uint8), 60, 120)
+    # エッジ検出（詳細保持のため）
+    edges = cv2.Canny((hidden_contrast * 255).astype(np.uint8), 80, 150)
     edges_norm = edges.astype(np.float32) / 255.0
     
     # HEX色をRGB値に変換
     color1_rgb = hex_to_rgb(color1)
     color2_rgb = hex_to_rgb(color2)
     
-    # 高周波パターンの生成
+    # 高周波パターンの生成（詳細を保持）
     if pattern_type == "horizontal":
         y_indices = np.arange(height).reshape(-1, 1)
         base_stripes = (y_indices * 2) % 2  # 高周波数化
@@ -55,39 +56,62 @@ def create_high_freq_moire_stripes(hidden_img, pattern_type="horizontal", streng
     light_regions = stripe_pattern == 1.0
     dark_regions = stripe_pattern == 0.0
     
-    # 基準明度値（適切な中間調）
-    dark_base = 85    # 暗い縞の基準値
-    light_base = 170  # 明るい縞の基準値
+    # 隠し画像に基づく詳細な明度調整
+    brightness_adjustment = (hidden_contrast - 0.5) * strength * 400.0
     
-    # 隠し画像に基づく明度調整（シンプル化）
-    brightness_adjustment = (hidden_contrast - 0.5) * strength * 300
-    
-    # エッジ強調（適度な強調）
-    edge_multiplier = 1.0 + edges_norm * 1.2
+    # エッジ強調（詳細保持）
+    edge_multiplier = 1.0 + edges_norm * 2.0
     final_adjustment = brightness_adjustment * edge_multiplier
+    
+    # 基準明度の計算（隠し画像の内容に基づく濃淡表現）
+    base_brightness_dark = 70 + hidden_contrast * 50   # 70-120の範囲
+    base_brightness_light = 150 + hidden_contrast * 70  # 150-220の範囲
     
     # RGB各チャンネルの処理
     for i in range(3):
-        # 明るい縞の処理
-        light_brightness = light_base + hidden_contrast * 30  # 明度の基本範囲
-        light_final = light_brightness + final_adjustment
-        light_color = light_final * (color2_rgb[i] / 255.0)
-        result[light_regions, i] = light_color[light_regions]
+        # 明るい縞の処理（color2ベース + 濃淡）
+        light_base = base_brightness_light * (color2_rgb[i] / 255.0)
+        result[light_regions, i] = light_base[light_regions] + final_adjustment[light_regions]
         
-        # 暗い縞の処理
-        dark_brightness = dark_base + hidden_contrast * 25   # 明度の基本範囲
-        dark_final = dark_brightness + final_adjustment
-        dark_color = dark_final * (color1_rgb[i] / 255.0)
-        result[dark_regions, i] = dark_color[dark_regions]
+        # 暗い縞の処理（color1ベース + 濃淡）
+        dark_base = base_brightness_dark * (color1_rgb[i] / 255.0)
+        result[dark_regions, i] = dark_base[dark_regions] + final_adjustment[dark_regions]
     
-    # 値のクリッピング（自然な範囲）
-    result = np.clip(result, 45, 210)
+    # 値のクリッピング（濃淡を保つ）
+    result = np.clip(result, 30, 225)  # 完全な黒白を避けて濃淡を保つ
     
     return result.astype(np.uint8)
 
+# ベクトル化による超高速パターン生成関数
+def create_vectorized_stripe_pattern(height, width, pattern_type="horizontal", frequency=1):
+    """
+    完全ベクトル化による縞パターン生成
+    従来のループ処理を完全排除し、メモリ効率と速度を両立
+    """
+    if pattern_type == "horizontal":
+        # 行インデックス配列（メモリ効率的）
+        indices = np.arange(height).reshape(-1, 1) * frequency
+        pattern = (indices % 2).astype(np.float32)
+        return np.broadcast_to(pattern, (height, width))
+    else:  # vertical
+        # 列インデックス配列（メモリ効率的）
+        indices = np.arange(width).reshape(1, -1) * frequency
+        pattern = (indices % 2).astype(np.float32)
+        return np.broadcast_to(pattern, (height, width))
+
+# 既存関数のエイリアス（互換性維持）
+def create_fast_moire_stripes(hidden_img, pattern_type="horizontal", strength=0.02):
+    """基本モアレ縞模様（ベクトル化版）"""
+    return create_moire_hidden_stripes(hidden_img, pattern_type, strength)
+
+def create_fast_high_frequency_stripes(hidden_img, pattern_type="horizontal", strength=0.015):
+    """高周波モアレ縞模様（ベクトル化版）"""
+    return create_high_frequency_moire_stripes(hidden_img, pattern_type, strength)
+
 def create_moire_hidden_stripes(hidden_img, pattern_type="horizontal", strength=0.02, color1="#000000", color2="#FFFFFF"):
     """
-    モアレ効果を利用した隠し画像埋め込み（修正版・自然な濃淡表現）
+    モアレ効果を利用した隠し画像埋め込み（濃淡詳細表現版・ベクトル化対応）
+    隠し画像の詳細情報を縞模様の濃淡として表現
     """
     if isinstance(hidden_img, np.ndarray):
         hidden_array = hidden_img.astype(np.float32)
@@ -102,13 +126,13 @@ def create_moire_hidden_stripes(hidden_img, pattern_type="horizontal", strength=
     else:
         hidden_gray = hidden_array
     
-    # 正規化と適度なコントラスト強調
+    # 正規化とコントラスト強調
     hidden_norm = hidden_gray / 255.0
-    hidden_contrast = np.clip((hidden_norm - 0.5) * 1.6 + 0.5, 0, 1)
+    hidden_contrast = np.clip((hidden_norm - 0.5) * 2.5 + 0.5, 0, 1)
     
-    # エッジ検出（2段階）
-    edges1 = cv2.Canny((hidden_contrast * 255).astype(np.uint8), 40, 100)
-    edges2 = cv2.Canny((hidden_contrast * 255).astype(np.uint8), 70, 140)
+    # 複数レベルのエッジ検出
+    edges1 = cv2.Canny((hidden_contrast * 255).astype(np.uint8), 50, 120)
+    edges2 = cv2.Canny((hidden_contrast * 255).astype(np.uint8), 80, 200)
     edges_combined = np.maximum(edges1.astype(np.float32), edges2.astype(np.float32) * 0.7) / 255.0
     
     # HEX色をRGBに変換
@@ -126,23 +150,23 @@ def create_moire_hidden_stripes(hidden_img, pattern_type="horizontal", strength=
     # 結果配列
     result = np.zeros((height, width, 3), dtype=np.float32)
     
-    # 基準明度値の範囲設定
-    dark_base_range = [75, 105]   # 暗い縞の範囲
-    light_base_range = [150, 190] # 明るい縞の範囲
+    # 明度調整の計算（隠し画像の詳細を詳細に反映）
+    pixel_brightness = 0.3 + hidden_contrast * 0.7  # 0.3-1.0の範囲
     
-    # 明度調整の計算（隠し画像の詳細を適度に反映）
-    pixel_brightness = 0.5 + hidden_contrast * 0.5  # 0.5-1.0の範囲
-    
-    # エッジ強調（適度な設定）
-    edge_enhancement = 1.0 + edges_combined * 0.8
+    # 輪郭強調（詳細を保つため）
+    edge_enhancement = 1.0 + edges_combined * 1.5
     enhanced_brightness = pixel_brightness * edge_enhancement
     
-    # 詳細変調（隠し画像の詳細を反映）
-    detail_modulation = (hidden_contrast - 0.5) * strength * 150
+    # 細かい濃淡調整（隠し画像の詳細を反映）
+    detail_modulation = (hidden_contrast - 0.5) * strength * 200
     
     # 暗い縞と明るい縞の処理
     dark_regions = stripe_pattern == 0
     light_regions = stripe_pattern == 1
+    
+    # 基準値（隠し画像に応じて可変・濃淡表現）
+    dark_base_range = [50, 110]   # 暗い縞の範囲
+    light_base_range = [145, 205] # 明るい縞の範囲
     
     # RGB各チャンネルの詳細処理
     for i in range(3):
@@ -158,14 +182,15 @@ def create_moire_hidden_stripes(hidden_img, pattern_type="horizontal", strength=
         light_final = light_adjusted * (color2_rgb[i] / 255.0)
         result[light_regions, i] = light_final[light_regions]
     
-    # 適切な範囲にクリッピング（自然な濃淡保持）
-    result = np.clip(result, 50, 200)
+    # 適切な範囲にクリッピング（濃淡保持）
+    result = np.clip(result, 25, 230)
     
     return result.astype(np.uint8)
 
 def create_adaptive_moire_stripes(hidden_img, pattern_type="horizontal", mode="adaptive", color1="#000000", color2="#FFFFFF"):
     """
-    適応型モアレ縞模様：自然な濃淡表現版（修正版）
+    適応型モアレ縞模様：濃淡詳細表現版（ベクトル化対応）
+    隠し画像の内容に応じて適応的に濃淡を調整
     """
     if isinstance(hidden_img, np.ndarray):
         hidden_array = hidden_img.astype(np.float32)
@@ -180,76 +205,82 @@ def create_adaptive_moire_stripes(hidden_img, pattern_type="horizontal", mode="a
     else:
         hidden_gray = hidden_array
     
-    # 正規化と適度なコントラスト強調
+    # 正規化とコントラスト強調
     hidden_norm = hidden_gray / 255.0
-    hidden_contrast = np.clip((hidden_norm - 0.5) * 1.4 + 0.5, 0, 1)
+    hidden_contrast = np.clip((hidden_norm - 0.5) * 2.2 + 0.5, 0, 1)
     
-    # 強度レベル（モードに応じた調整・簡略化）
+    # 強度レベル（モードに応じた調整）
     strength_map = {
-        "high_freq": 0.025,
-        "adaptive": 0.030,
-        "adaptive_subtle": 0.020,
-        "adaptive_strong": 0.035,
-        "adaptive_minimal": 0.015,
-        "perfect_subtle": 0.032,
-        "ultra_subtle": 0.022,
-        "near_perfect": 0.028,
-        "color_preserving": 0.030,
-        "hue_preserving": 0.025,
-        "blended": 0.028
+        "high_frequency": 0.035,
+        "adaptive": 0.040,
+        "adaptive_subtle": 0.025,
+        "adaptive_strong": 0.050,
+        "adaptive_minimal": 0.020,
+        "perfect_subtle": 0.045,
+        "ultra_subtle": 0.030,
+        "near_perfect": 0.038,
+        "color_preserving": 0.042,
+        "hue_preserving": 0.030,
+        "blended": 0.038
     }
     
-    strength = strength_map.get(mode, 0.030)
+    strength = strength_map.get(mode, 0.040)
     
     # HEX色をRGBに変換
     color1_rgb = hex_to_rgb(color1)
     color2_rgb = hex_to_rgb(color2)
     
-    # 縞模様パターン（シンプル化）
+    # 適応的な縞模様パターン
     if pattern_type == "horizontal":
         y_indices = np.arange(height).reshape(-1, 1)
-        stripe_pattern = np.broadcast_to((y_indices % 2), (height, width))
+        # 隠し画像の内容に基づく適応周波数
+        frequency_mod = 1.0 + hidden_contrast * 0.3
+        stripe_pattern = np.sin(y_indices * frequency_mod * 1.5) > 0
+        stripe_pattern = np.broadcast_to(stripe_pattern, (height, width))
     else:  # vertical
         x_indices = np.arange(width).reshape(1, -1)
-        stripe_pattern = np.broadcast_to((x_indices % 2), (height, width))
+        frequency_mod = 1.0 + hidden_contrast * 0.3
+        stripe_pattern = np.sin(x_indices * frequency_mod * 1.5) > 0
+        stripe_pattern = np.broadcast_to(stripe_pattern, (height, width))
     
     # 隠し画像影響の計算
     hidden_influence = hidden_contrast * strength
     
-    # 適応的な明度調整
-    adaptive_brightness = 0.6 + hidden_contrast * 0.4
+    # 適応的な明度調整（濃淡表現）
+    adaptive_brightness = 0.4 + hidden_contrast * 0.6
     
     # 結果配列
     result = np.zeros((height, width, 3), dtype=np.float32)
     
     # 明るい縞と暗い縞の領域
-    light_regions = stripe_pattern == 1
-    dark_regions = stripe_pattern == 0
+    light_regions = stripe_pattern
+    dark_regions = ~stripe_pattern
     
-    # 基準値（適応的に調整・自然な濃淡表現）
-    light_base = 160 + hidden_contrast * 30  # 160-190の範囲
-    dark_base = 80 + hidden_contrast * 25    # 80-105の範囲
+    # 基準値（適応的に調整・濃淡表現）
+    light_base = 160 + hidden_contrast * 60  # 160-220の範囲
+    dark_base = 60 + hidden_contrast * 50    # 60-110の範囲
     
     # RGB各チャンネルの処理
     for i in range(3):
         # 明るい縞の適応調整
-        light_adjustment = hidden_influence * 50
+        light_adjustment = hidden_influence * 80
         light_final = (light_base + light_adjustment) * adaptive_brightness * (color2_rgb[i] / 255.0)
         result[light_regions, i] = light_final[light_regions]
         
         # 暗い縞の適応調整
-        dark_adjustment = hidden_influence * 40
+        dark_adjustment = hidden_influence * 60
         dark_final = (dark_base + dark_adjustment) * adaptive_brightness * (color1_rgb[i] / 255.0)
         result[dark_regions, i] = dark_final[dark_regions]
     
-    # クリッピング（自然な濃淡保持）
-    result = np.clip(result, 55, 185)
+    # クリッピング（濃淡保持）
+    result = np.clip(result, 35, 220)
     
     return result.astype(np.uint8)
 
 def create_perfect_moire_pattern(hidden_img, pattern_type="horizontal", color1="#000000", color2="#FFFFFF"):
     """
-    完璧なモアレパターン：自然な濃淡表現版（修正版）
+    完璧なモアレパターン：濃淡詳細表現版（ベクトル化対応）
+    最高品質の隠し画像詳細表現を実現
     """
     if isinstance(hidden_img, np.ndarray):
         hidden_array = hidden_img.astype(np.float32)
@@ -264,20 +295,20 @@ def create_perfect_moire_pattern(hidden_img, pattern_type="horizontal", color1="
     else:
         hidden_gray = hidden_array
     
-    # 前処理（高品質だが自然）
+    # 前処理（最高品質）
     hidden_norm = hidden_gray / 255.0
-    hidden_contrast = np.clip((hidden_norm - 0.5) * 2.0 + 0.5, 0, 1)
+    hidden_contrast = np.clip((hidden_norm - 0.5) * 4.0 + 0.5, 0, 1)
     
     # 高精度エッジ検出
-    edges = cv2.Canny((hidden_contrast * 255).astype(np.uint8), 30, 100)
+    edges = cv2.Canny((hidden_contrast * 255).astype(np.uint8), 40, 140)
     edges_norm = edges.astype(np.float32) / 255.0
     
     # HEX色をRGBに変換
     color1_rgb = hex_to_rgb(color1)
     color2_rgb = hex_to_rgb(color2)
     
-    # 強度設定（適度な影響）
-    strength = 0.04
+    # 強度設定
+    strength = 0.06  # より強い影響
     
     # 縞パターンの生成
     if pattern_type == "horizontal":
@@ -287,27 +318,27 @@ def create_perfect_moire_pattern(hidden_img, pattern_type="horizontal", color1="
         x_indices = np.arange(width).reshape(1, -1)
         stripe_base = np.broadcast_to((x_indices % 2), (height, width))
     
-    # 自然な濃淡調整
+    # 完璧な濃淡調整
     light_regions = stripe_base == 1
     dark_regions = stripe_base == 0
     
-    # 高品質な明度計算
-    perfect_brightness = 0.6 + hidden_contrast * 0.4
-    edge_boost = 1.0 + edges_norm * 1.0
+    # 高度な明度計算
+    perfect_brightness = 0.3 + hidden_contrast * 0.7
+    edge_boost = 1.0 + edges_norm * 2.5
     final_brightness = perfect_brightness * edge_boost
     
     # 詳細変調
-    detail_mod = (hidden_contrast - 0.5) * strength * 200
+    detail_mod = (hidden_contrast - 0.5) * strength * 300
     
     # 結果配列
     result = np.zeros((height, width, 3), dtype=np.float32)
     
-    # 明るい縞の完璧な処理（自然な濃淡表現）
-    light_base_value = 165 + hidden_contrast * 25  # 165-190
+    # 明るい縞の完璧な処理（濃淡表現）
+    light_base_value = 170 + hidden_contrast * 50  # 170-220
     light_final = (light_base_value * final_brightness + detail_mod)
     
-    # 暗い縞の完璧な処理（自然な濃淡表現）
-    dark_base_value = 75 + hidden_contrast * 30    # 75-105
+    # 暗い縞の完璧な処理（濃淡表現）
+    dark_base_value = 45 + hidden_contrast * 65   # 45-110
     dark_final = (dark_base_value * final_brightness + detail_mod)
     
     # RGB適用
@@ -315,15 +346,16 @@ def create_perfect_moire_pattern(hidden_img, pattern_type="horizontal", color1="
         result[light_regions, i] = light_final[light_regions] * (color2_rgb[i] / 255.0)
         result[dark_regions, i] = dark_final[dark_regions] * (color1_rgb[i] / 255.0)
     
-    # 最終クリッピング（自然な濃淡保持）
-    result = np.clip(result, 60, 180)
+    # 最終クリッピング（濃淡保持）
+    result = np.clip(result, 20, 235)
     
     return result.astype(np.uint8)
 
-# 高速化による超高速パターン生成関数
+# ベクトル化による超高速パターン生成関数
 def create_vectorized_stripe_pattern(height, width, pattern_type="horizontal", frequency=1):
     """
     完全ベクトル化による縞パターン生成
+    従来のループ処理を完全排除し、メモリ効率と速度を両立
     """
     if pattern_type == "horizontal":
         # 行インデックス配列（メモリ効率的）
@@ -336,11 +368,11 @@ def create_vectorized_stripe_pattern(height, width, pattern_type="horizontal", f
         pattern = (indices % 2).astype(np.float32)
         return np.broadcast_to(pattern, (height, width))
 
-# エイリアス関数（互換性維持）
+# 既存関数のエイリアス（互換性維持）
 def create_fast_moire_stripes(hidden_img, pattern_type="horizontal", strength=0.02):
     """基本モアレ縞模様（ベクトル化版）"""
     return create_moire_hidden_stripes(hidden_img, pattern_type, strength)
 
-def create_fast_high_freq_stripes(hidden_img, pattern_type="horizontal", strength=0.015):
+def create_fast_high_frequency_stripes(hidden_img, pattern_type="horizontal", strength=0.015):
     """高周波モアレ縞模様（ベクトル化版）"""
-    return create_high_freq_moire_stripes(hidden_img, pattern_type, strength)
+    return create_high_frequency_moire_stripes(hidden_img, pattern_type, strength)
