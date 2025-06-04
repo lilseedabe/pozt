@@ -1,5 +1,5 @@
 """
-基本的なパターン生成機能（濃淡詳細表現対応版）
+基本的なパターン生成機能（濃淡詳細表現版）
 """
 import numpy as np
 import cv2
@@ -12,25 +12,43 @@ def hex_to_rgb(hex_color):
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 def create_stripe_base(height, width, pattern_type="horizontal", color1="#000000", color2="#ffffff"):
-    """基本的な縞模様を生成（カラー対応）"""
+    """基本的な縞模様を生成（濃淡表現版）- 常に濃淡で表現"""
     result = np.zeros((height, width, 3), dtype=np.uint8)
     
     # HEX色をRGBに変換
     rgb1 = hex_to_rgb(color1)
     rgb2 = hex_to_rgb(color2)
     
-    if pattern_type == "horizontal":
-        # 横縞パターン
-        for y in range(height):
-            color = rgb1 if y % 2 == 0 else rgb2
-            result[y, :] = color
-    else:  # vertical
-        # 縦縞パターン
-        for x in range(width):
-            color = rgb1 if x % 2 == 0 else rgb2
-            result[:, x] = color
+    # 濃淡表現用の基準値（完全な黒白を避ける）
+    dark_base = 60   # 暗い縞の基準値
+    light_base = 195 # 明るい縞の基準値
     
-    return result
+    if pattern_type == "horizontal":
+        # 横縞パターン（濃淡表現）
+        for y in range(height):
+            if y % 2 == 0:
+                # 暗い縞
+                for i in range(3):
+                    result[y, :, i] = dark_base * (rgb1[i] / 255.0)
+            else:
+                # 明るい縞
+                for i in range(3):
+                    result[y, :, i] = light_base * (rgb2[i] / 255.0)
+    else:  # vertical
+        # 縦縞パターン（濃淡表現）
+        for x in range(width):
+            if x % 2 == 0:
+                # 暗い縞
+                for i in range(3):
+                    result[:, x, i] = dark_base * (rgb1[i] / 255.0)
+            else:
+                # 明るい縞
+                for i in range(3):
+                    result[:, x, i] = light_base * (rgb2[i] / 255.0)
+    
+def get_adaptive_strength(mode):
+    """モードに応じた強度を取得"""
+    return STRENGTH_MAP.get(mode, 0.02)
 
 def create_gradation_stripe_base(hidden_img, pattern_type="horizontal", color1="#000000", color2="#ffffff", detail_strength=0.8):
     """
