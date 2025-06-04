@@ -117,8 +117,8 @@ def create_fast_high_frequency_stripes(hidden_img, pattern_type="horizontal", st
 
 def create_moire_hidden_stripes(hidden_img, pattern_type="horizontal", strength=0.02, color1="#000000", color2="#FFFFFF"):
     """
-    モアレ効果を利用した隠し画像埋め込み（圧縮耐性・詳細強化版）
-    重ね合わせモードと同等の圧縮耐性を持ちつつ、4K時に詳細を鮮明に表現
+    モアレ効果を利用した隠し画像埋め込み（重ね合わせモード方式採用）
+    重ね合わせモードと同等のマスク処理による圧縮耐性を実現
     """
     if isinstance(hidden_img, np.ndarray):
         hidden_array = hidden_img.astype(np.float32)
@@ -133,18 +133,20 @@ def create_moire_hidden_stripes(hidden_img, pattern_type="horizontal", strength=
     else:
         hidden_gray = hidden_array
     
-    # 正規化とコントラスト強調（詳細強化）
-    hidden_norm = hidden_gray / 255.0
-    hidden_contrast = np.clip((hidden_norm - 0.5) * 3.5 + 0.5, 0, 1)  # より強いコントラスト
-    
-    # 高精度エッジ検出（詳細保持）
-    edges1 = cv2.Canny((hidden_contrast * 255).astype(np.uint8), 30, 100)
-    edges2 = cv2.Canny((hidden_contrast * 255).astype(np.uint8), 60, 180)
-    edges_combined = np.maximum(edges1.astype(np.float32), edges2.astype(np.float32) * 0.8) / 255.0
-    
     # HEX色をRGBに変換
     color1_rgb = hex_to_rgb(color1)
     color2_rgb = hex_to_rgb(color2)
+    
+    # 重ね合わせモード方式のマスク処理
+    # 1. 二値化マスク生成（重ね合わせモードと同じ）
+    _, binary_mask = cv2.threshold(hidden_gray, 100, 255, cv2.THRESH_BINARY_INV)
+    
+    # 2. ガウシアンブラー（段階的透明度のため）
+    blurred_mask = cv2.GaussianBlur(binary_mask, (5, 5), 0)
+    
+    # 3. 適応的マスク（0-1の範囲）
+    overlay_opacity = 0.75  # 重ね合わせモードと同等
+    adaptive_mask = (blurred_mask.astype(np.float32) / 255.0) * overlay_opacity
     
     # 明確な1ピクセル縞パターンの生成
     if pattern_type == "horizontal":
@@ -156,42 +158,57 @@ def create_moire_hidden_stripes(hidden_img, pattern_type="horizontal", strength=
         stripe_pattern = (x_coords % 2)
         stripe_pattern = np.broadcast_to(stripe_pattern, (height, width))
     
-    # 結果配列
-    result = np.zeros((height, width, 3), dtype=np.uint8)
+    # 基本縞パターンの生成
+    base_stripes = np.zeros((height, width, 3), dtype=np.float32)
     
-    # 明確な領域分離
+    # 暗い縞と明るい縞の領域
     dark_regions = stripe_pattern == 0
     light_regions = stripe_pattern == 1
     
-    # 圧縮耐性のための明度範囲調整（重ね合わせモード準拠）
-    # 基準値を中間グレーに近づけて圧縮耐性を向上
-    base_gray = 128  # 中間グレー基準
+    # 隠し画像の詳細分析（4K詳細用）
+    hidden_norm = hidden_gray / 255.0
+    hidden_enhanced = np.clip((hidden_norm - 0.5) * 2.5 + 0.5, 0, 1)
     
-    # 隠し画像詳細による強い変調（4K時の詳細表現）
-    detail_intensity = 0.8  # 詳細強度
-    detail_modulation = (hidden_contrast - 0.5) * detail_intensity * 80  # ±32の範囲
+    # エッジ検出（詳細強化）
+    edges = cv2.Canny((hidden_enhanced * 255).astype(np.uint8), 40, 120)
+    edge_boost = (edges.astype(np.float32) / 255.0) * 25
     
-    # エッジ強調（詳細を際立たせる）
-    edge_enhancement = edges_combined * 40  # エッジ部分を強調
+    # 詳細変調
+    detail_modulation = (hidden_enhanced - 0.5) * strength * 200 + edge_boost
     
-    # 最終調整値
-    final_adjustment = detail_modulation + edge_enhancement
-    
-    # RGB各チャンネルの処理（圧縮耐性重視）
+    # RGB各チャンネルの処理（詳細反映）
     for i in range(3):
-        # 暗い縞：基準グレーから少し暗く、詳細で大きく変調
-        dark_base = base_gray - 25 + hidden_contrast * 15  # 88-118の範囲
-        dark_final = dark_base + final_adjustment
-        dark_values = np.clip(dark_final, 60, 140) * (color1_rgb[i] / 255.0)
-        result[dark_regions, i] = dark_values[dark_regions]
+        # 暗い縞の処理
+        dark_base = 60 + hidden_enhanced * 30  # 60-90の範囲
+        dark_final = dark_base + detail_modulation
+        dark_values = np.clip(dark_final, 30, 120) * (color1_rgb[i] / 255.0)
+        base_stripes[dark_regions, i] = dark_values[dark_regions]
         
-        # 明るい縞：基準グレーから少し明るく、詳細で大きく変調
-        light_base = base_gray + 25 + hidden_contrast * 15  # 138-168の範囲
-        light_final = light_base + final_adjustment
-        light_values = np.clip(light_final, 115, 195) * (color2_rgb[i] / 255.0)
-        result[light_regions, i] = light_values[light_regions]
+        # 明るい縞の処理
+        light_base = 160 + hidden_enhanced * 40  # 160-200の範囲
+        light_final = light_base + detail_modulation
+        light_values = np.clip(light_final, 135, 225) * (color2_rgb[i] / 255.0)
+        base_stripes[light_regions, i] = light_values[light_regions]
     
-    return result
+    # 重ね合わせモード方式の合成処理
+    # 1. グレー背景（隠し画像の詳細を反映）
+    grey_base = 115 + hidden_enhanced * 30  # 115-145の範囲
+    grey_background = np.zeros((height, width, 3), dtype=np.float32)
+    for i in range(3):
+        grey_background[:, :, i] = grey_base
+    
+    # 2. マスクを3チャンネルに拡張
+    mask_3d = np.stack([adaptive_mask, adaptive_mask, adaptive_mask], axis=2)
+    
+    # 3. 重ね合わせモード方式の最終合成
+    # マスク値が大きい（隠し画像が暗い）→ グレー背景が多く表示
+    # マスク値が小さい（隠し画像が明るい）→ 縞模様が多く表示
+    result = base_stripes * (1.0 - mask_3d) + grey_background * mask_3d
+    
+    # 適切な範囲にクリッピング
+    result = np.clip(result, 0, 255)
+    
+    return result.astype(np.uint8)
 
 def create_adaptive_moire_stripes(hidden_img, pattern_type="horizontal", mode="adaptive", color1="#000000", color2="#FFFFFF"):
     """
